@@ -1,0 +1,309 @@
+// VCG Property Manager — "DoorLoop Lite" with HUD-VASH support.
+// All money is stored as integer cents to avoid floating-point errors.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PropertyType {
+  MULTIFAMILY
+  SINGLE_FAMILY
+  DUPLEX
+  OTHER
+}
+
+enum LeaseStatus {
+  DRAFT
+  ACTIVE
+  ENDED
+}
+
+enum Party {
+  TENANT
+  HOUSING_AUTHORITY
+}
+
+enum ChargeType {
+  RENT
+  LATE_FEE
+  SECURITY_DEPOSIT
+  UTILITY
+  DAMAGE
+  OTHER
+}
+
+enum PaymentMethod {
+  ACH
+  CHECK
+  CASH
+  CARD
+  MONEY_ORDER
+  OTHER
+}
+
+enum MaintenancePriority {
+  LOW
+  NORMAL
+  HIGH
+  EMERGENCY
+}
+
+enum MaintenanceStatus {
+  OPEN
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum InspectionType {
+  HQS_INITIAL
+  HQS_ANNUAL
+  NSPIRE
+  REINSPECTION
+  MOVE_IN
+  MOVE_OUT
+  INTERNAL
+}
+
+enum InspectionResult {
+  PENDING
+  PASS
+  FAIL
+  INCONCLUSIVE
+}
+
+enum DocumentCategory {
+  LEASE
+  HAP_CONTRACT
+  INSPECTION
+  RECEIPT
+  PHOTO
+  ID
+  NOTICE
+  OTHER
+}
+
+model Property {
+  id            String       @id @default(cuid())
+  name          String
+  type          PropertyType @default(MULTIFAMILY)
+  street        String
+  city          String
+  state         String
+  zip           String
+  purchasePrice Int? // cents
+  purchaseDate  DateTime?
+  notes         String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  units     Unit[]
+  documents Document[]
+}
+
+model Unit {
+  id         String   @id @default(cuid())
+  propertyId String
+  label      String // "Unit 2B", "Main house"
+  bedrooms   Int      @default(1)
+  bathrooms  Float    @default(1)
+  sqft       Int?
+  marketRent Int? // cents
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  property     Property             @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  leases       Lease[]
+  maintenance  MaintenanceRequest[]
+  inspections  Inspection[]
+  documents    Document[]
+
+  @@unique([propertyId, label])
+}
+
+model Tenant {
+  id                    String   @id @default(cuid())
+  firstName             String
+  lastName              String
+  email                 String?
+  phone                 String?
+  isVeteran             Boolean  @default(true)
+  caseManagerName       String? // VA / HUD-VASH case manager
+  caseManagerPhone      String?
+  caseManagerEmail      String?
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  notes                 String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  leases    Lease[]
+  documents Document[]
+}
+
+// Public Housing Agency that pays the HAP (housing assistance payment) portion.
+model HousingAuthority {
+  id           String   @id @default(cuid())
+  name         String
+  contactName  String?
+  email        String?
+  phone        String?
+  portalUrl    String?
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  leases Lease[]
+}
+
+model Lease {
+  id                 String      @id @default(cuid())
+  unitId             String
+  tenantId           String
+  status             LeaseStatus @default(ACTIVE)
+  startDate          DateTime
+  endDate            DateTime?
+  // Rent split. contractRent = tenantPortion + hapAmount for voucher leases.
+  contractRent       Int // cents, total rent to owner
+  tenantPortion      Int // cents, what the tenant pays
+  hapAmount          Int         @default(0) // cents, what the housing authority pays
+  dueDay             Int         @default(1)
+  securityDeposit    Int         @default(0) // cents
+  lateFeeAmount      Int         @default(0) // cents, flat fee on tenant portion only
+  lateFeeGraceDays   Int         @default(5)
+  // HUD-VASH / voucher details
+  housingAuthorityId String?
+  voucherNumber      String?
+  hapContractStart   DateTime?
+  nextRecertDate     DateTime? // annual income recertification
+  moveInDate         DateTime?
+  moveOutDate        DateTime?
+  notes              String?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  unit             Unit              @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  housingAuthority HousingAuthority? @relation(fields: [housingAuthorityId], references: [id], onDelete: SetNull)
+  charges          Charge[]
+  payments         Payment[]
+  documents        Document[]
+
+  @@index([status])
+}
+
+// Anything owed on a lease. Rent is split into two charges each month (tenant + housing authority).
+model Charge {
+  id          String     @id @default(cuid())
+  leaseId     String
+  type        ChargeType
+  party       Party      @default(TENANT)
+  amount      Int // cents
+  dueDate     DateTime
+  period      String? // "2026-10" for monthly rent / late fee; enforces one per month
+  description String?
+  createdAt   DateTime   @default(now())
+
+  lease Lease @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+
+  @@unique([leaseId, type, party, period])
+  @@index([dueDate])
+}
+
+model Payment {
+  id        String        @id @default(cuid())
+  leaseId   String
+  party     Party         @default(TENANT)
+  amount    Int // cents
+  paidOn    DateTime
+  method    PaymentMethod @default(ACH)
+  reference String? // check #, ACH trace, PHA remittance #
+  notes     String?
+  createdAt DateTime      @default(now())
+
+  lease Lease @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+
+  @@index([paidOn])
+}
+
+model Vendor {
+  id        String   @id @default(cuid())
+  name      String
+  trade     String? // plumbing, HVAC, electrical...
+  phone     String?
+  email     String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  requests MaintenanceRequest[]
+}
+
+model MaintenanceRequest {
+  id          String              @id @default(cuid())
+  unitId      String
+  vendorId    String?
+  title       String
+  description String?
+  priority    MaintenancePriority @default(NORMAL)
+  status      MaintenanceStatus   @default(OPEN)
+  reportedOn  DateTime            @default(now())
+  scheduledOn DateTime?
+  completedOn DateTime?
+  cost        Int? // cents
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  unit      Unit       @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  vendor    Vendor?    @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  documents Document[]
+
+  @@index([status])
+}
+
+model Inspection {
+  id            String           @id @default(cuid())
+  unitId        String
+  type          InspectionType
+  scheduledDate DateTime
+  completedDate DateTime?
+  result        InspectionResult @default(PENDING)
+  inspector     String?
+  deficiencies  String?
+  cureByDate    DateTime? // deadline to fix failed items before HAP abatement
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  unit      Unit       @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  documents Document[]
+}
+
+model Document {
+  id            String           @id @default(cuid())
+  name          String
+  category      DocumentCategory @default(OTHER)
+  storageKey    String           @unique
+  mimeType      String
+  size          Int
+  propertyId    String?
+  unitId        String?
+  tenantId      String?
+  leaseId       String?
+  maintenanceId String?
+  inspectionId  String?
+  createdAt     DateTime         @default(now())
+
+  property    Property?           @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  unit        Unit?               @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  tenant      Tenant?             @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  lease       Lease?              @relation(fields: [leaseId], references: [id], onDelete: SetNull)
+  maintenance MaintenanceRequest? @relation(fields: [maintenanceId], references: [id], onDelete: SetNull)
+  inspection  Inspection?         @relation(fields: [inspectionId], references: [id], onDelete: SetNull)
+}

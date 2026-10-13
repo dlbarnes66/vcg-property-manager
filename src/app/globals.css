@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --color-ink: #0f1b2d;
+  --color-navy: #13294b;
+  --color-navy-600: #1d3a66;
+  --color-gold: #c99a2e;
+  --color-paper: #f6f7f9;
+  --color-line: #e3e6eb;
+  --color-muted: #5b6676;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+
+/* number columns line up */
+.tabular { font-variant-numeric: tabular-nums; }
