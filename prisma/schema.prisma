@@ -86,6 +86,57 @@ enum OnlinePaymentStatus {
   EXPIRED // checkout abandoned
 }
 
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+enum TaskPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum Recurrence {
+  NONE
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+enum EventType {
+  MEETING
+  SHOWING
+  APPOINTMENT
+  INSPECTION
+  REMINDER
+  OTHER
+}
+
+enum MessageChannel {
+  EMAIL
+  SMS
+  CALL // logged only
+  OTHER // logged only (in person, letter, portal, ...)
+}
+
+enum MessageDirection {
+  OUTBOUND
+  INBOUND
+}
+
+enum MessageStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  FAILED
+  RECEIVED
+  LOGGED
+}
+
 enum DocumentCategory {
   LEASE
   HAP_CONTRACT
@@ -111,8 +162,12 @@ model Property {
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 
-  units     Unit[]
-  documents Document[]
+  units       Unit[]
+  documents   Document[]
+  noteEntries Note[]
+  tasks       Task[]
+  events      CalendarEvent[]
+  messages    Message[]
 }
 
 model Unit {
@@ -132,6 +187,9 @@ model Unit {
   maintenance MaintenanceRequest[]
   inspections Inspection[]
   documents   Document[]
+  noteEntries Note[]
+  tasks       Task[]
+  events      CalendarEvent[]
 
   @@unique([propertyId, label])
 }
@@ -154,6 +212,10 @@ model Tenant {
   portalInvitedAt       DateTime?
   clerkUserId           String?   @unique // set the first time the tenant signs in to the portal
   stripeCustomerId      String?   @unique
+  // Communications
+  smsConsent            Boolean   @default(false) // tenant agreed to receive texts (required before the app texts them)
+  smsConsentAt          DateTime?
+  emailOptOut           Boolean   @default(false) // excluded from announcements; direct messages still allowed
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
@@ -161,6 +223,10 @@ model Tenant {
   documents           Document[]
   maintenanceRequests MaintenanceRequest[]
   onlinePayments      OnlinePayment[]
+  noteEntries         Note[]
+  tasks               Task[]
+  events              CalendarEvent[]
+  messages            Message[]
 }
 
 // Public Housing Agency that pays the HAP (housing assistance payment) portion.
@@ -175,7 +241,10 @@ model HousingAuthority {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  leases Lease[]
+  leases      Lease[]
+  noteEntries Note[]
+  tasks       Task[]
+  messages    Message[]
 }
 
 model Lease {
@@ -211,6 +280,10 @@ model Lease {
   payments         Payment[]
   documents        Document[]
   onlinePayments   OnlinePayment[]
+  noteEntries      Note[]
+  tasks            Task[]
+  events           CalendarEvent[]
+  messages         Message[]
 
   @@index([status])
 }
@@ -261,7 +334,10 @@ model Vendor {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  requests MaintenanceRequest[]
+  requests    MaintenanceRequest[]
+  noteEntries Note[]
+  tasks       Task[]
+  messages    Message[]
 }
 
 model MaintenanceRequest {
@@ -285,6 +361,9 @@ model MaintenanceRequest {
   vendor      Vendor?    @relation(fields: [vendorId], references: [id], onDelete: SetNull)
   submittedBy Tenant?    @relation(fields: [submittedByTenantId], references: [id], onDelete: SetNull)
   documents   Document[]
+  noteEntries Note[]
+  tasks       Task[]
+  messages    Message[]
 
   @@index([status])
 }
@@ -350,4 +429,139 @@ model OnlinePayment {
   payment Payment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
 
   @@index([leaseId, status])
+}
+
+// ---------------------------------------------------------------------------------------------
+// Phase 1 operations: notes, tasks, calendar, communications
+// ---------------------------------------------------------------------------------------------
+
+// A note attached to exactly one record (property, unit, tenant, lease, work order, vendor, or PHA).
+model Note {
+  id                 String   @id @default(cuid())
+  body               String
+  pinned             Boolean  @default(false)
+  authorEmail        String?
+  propertyId         String?
+  unitId             String?
+  tenantId           String?
+  leaseId            String?
+  maintenanceId      String?
+  vendorId           String?
+  housingAuthorityId String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  property         Property?           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  unit             Unit?               @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  tenant           Tenant?             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lease            Lease?              @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+  maintenance      MaintenanceRequest? @relation(fields: [maintenanceId], references: [id], onDelete: Cascade)
+  vendor           Vendor?             @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  housingAuthority HousingAuthority?   @relation(fields: [housingAuthorityId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+}
+
+model Task {
+  id                 String       @id @default(cuid())
+  title              String
+  description        String?
+  status             TaskStatus   @default(TODO)
+  priority           TaskPriority @default(NORMAL)
+  dueDate            DateTime?
+  completedAt        DateTime?
+  recurrence         Recurrence   @default(NONE) // completing a recurring task creates the next one
+  assigneeEmail      String?
+  createdByEmail     String?
+  propertyId         String?
+  unitId             String?
+  tenantId           String?
+  leaseId            String?
+  maintenanceId      String?
+  vendorId           String?
+  housingAuthorityId String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  property         Property?           @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  unit             Unit?               @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  tenant           Tenant?             @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  lease            Lease?              @relation(fields: [leaseId], references: [id], onDelete: SetNull)
+  maintenance      MaintenanceRequest? @relation(fields: [maintenanceId], references: [id], onDelete: SetNull)
+  vendor           Vendor?             @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  housingAuthority HousingAuthority?   @relation(fields: [housingAuthorityId], references: [id], onDelete: SetNull)
+
+  @@index([status, dueDate])
+}
+
+model CalendarEvent {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  type        EventType @default(OTHER)
+  start       DateTime // all-day events: UTC midnight of the day
+  end         DateTime?
+  allDay      Boolean   @default(false)
+  location    String?
+  propertyId  String?
+  unitId      String?
+  tenantId    String?
+  leaseId     String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  property Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  unit     Unit?     @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  tenant   Tenant?   @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  lease    Lease?    @relation(fields: [leaseId], references: [id], onDelete: SetNull)
+
+  @@index([start])
+}
+
+// One email, text, or logged call to/from one person. Announcements create one row per recipient (same batchId).
+model Message {
+  id                 String           @id @default(cuid())
+  channel            MessageChannel
+  direction          MessageDirection @default(OUTBOUND)
+  status             MessageStatus    @default(QUEUED)
+  toAddress          String? // email address or E.164 phone
+  fromAddress        String?
+  subject            String?
+  body               String
+  error              String?
+  providerMessageId  String?          @unique // SendGrid X-Message-Id or Twilio SID
+  batchId            String?
+  sentByEmail        String?
+  // who it's with
+  tenantId           String?
+  vendorId           String?
+  housingAuthorityId String?
+  // what it's about
+  propertyId         String?
+  leaseId            String?
+  maintenanceId      String?
+  readAt             DateTime? // inbound only: when you opened it
+  sentAt             DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  tenant           Tenant?             @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  vendor           Vendor?             @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  housingAuthority HousingAuthority?   @relation(fields: [housingAuthorityId], references: [id], onDelete: SetNull)
+  property         Property?           @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  lease            Lease?              @relation(fields: [leaseId], references: [id], onDelete: SetNull)
+  maintenance      MaintenanceRequest? @relation(fields: [maintenanceId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([batchId])
+}
+
+model MessageTemplate {
+  id        String         @id @default(cuid())
+  name      String         @unique
+  channel   MessageChannel // EMAIL or SMS
+  subject   String?
+  body      String // supports {{firstName}}, {{lastName}}, {{property}}, {{unit}}, {{balance}}, {{rent}}, {{dueDate}}
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
 }

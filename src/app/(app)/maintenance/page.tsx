@@ -76,7 +76,7 @@ export default async function MaintenancePage({ searchParams }: { searchParams: 
                     <Badge tone={maintTone(o.status)}>{titleCase(o.status)}</Badge>
                   </Td>
                   <Td className="text-muted">{o.vendor?.name ?? "—"}</Td>
-                  <Td className="tabular text-muted">{open ? `${daysBetween(o.reportedOn, today)}d` : fmtDate(o.completedOn)}</Td>
+                  <Td className="tabular text-muted">{open ? `${Math.max(0, daysBetween(o.reportedOn, today))}d` : fmtDate(o.completedOn)}</Td>
                   <Td className="tabular text-right">{money(o.cost)}</Td>
                 </tr>
               ))}

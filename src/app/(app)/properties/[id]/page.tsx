@@ -6,6 +6,8 @@ import { EditPopover } from "@/components/edit-popover";
 import { inForceLeaseWhere, tenantName } from "@/lib/queries";
 import { ActionForm } from "@/components/action-form";
 import { DocumentsPanel } from "@/components/documents-panel";
+import { NotesPanel } from "@/components/notes-panel";
+import { TasksPanel } from "@/components/tasks-panel";
 import {
   Badge, Card, CardBody, CardHeader, DetailList, Empty, Field, Input, LinkButton, PageHeader, Table, Td, Th, Textarea,
 } from "@/components/ui";
@@ -137,6 +139,8 @@ export default async function PropertyPage({ params }: { params: Promise<{ id: s
               {property.notes && <p className="mt-4 text-sm whitespace-pre-wrap text-muted">{property.notes}</p>}
             </CardBody>
           </Card>
+          <TasksPanel link={{ propertyId: id }} />
+          <NotesPanel link={{ propertyId: id }} />
           <DocumentsPanel link={{ propertyId: id }} />
         </div>
       </div>

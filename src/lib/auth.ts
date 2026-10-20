@@ -79,3 +79,12 @@ export async function requireTenant(): Promise<{ userId: string; tenant: Tenant 
   if (!v.userId) redirect("/sign-in");
   redirect("/not-authorized");
 }
+
+/** Like requireAccess, but also returns the admin's email (for "created by" / "sent by"). */
+export async function requireAdmin(): Promise<{ userId: string; email: string }> {
+  const v = await getViewer();
+  if (v.kind === "admin") return { userId: v.userId, email: v.email };
+  if (v.kind === "tenant") redirect("/portal");
+  if (!v.userId) redirect("/sign-in");
+  redirect("/not-authorized");
+}

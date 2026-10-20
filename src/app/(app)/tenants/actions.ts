@@ -24,13 +24,16 @@ function tenantData(fd: FormData) {
     emergencyContactName: optStr(fd, "emergencyContactName"),
     emergencyContactPhone: optStr(fd, "emergencyContactPhone"),
     notes: optStr(fd, "notes"),
+    smsConsent: bool(fd, "smsConsent"),
+    emailOptOut: bool(fd, "emailOptOut"),
   };
 }
 
 export async function createTenant(_: ActionResult, fd: FormData): Promise<ActionResult> {
   try {
     await requireAccess();
-    const t = await db.tenant.create({ data: tenantData(fd) });
+    const data = tenantData(fd);
+    const t = await db.tenant.create({ data: { ...data, smsConsentAt: data.smsConsent ? new Date() : null } });
     revalidatePath("/tenants");
     redirect(`/tenants/${t.id}`);
   } catch (e) {
@@ -41,8 +44,9 @@ export async function createTenant(_: ActionResult, fd: FormData): Promise<Actio
 export async function updateTenant(id: string, _: ActionResult, fd: FormData): Promise<ActionResult> {
   try {
     await requireAccess();
-    const data = tenantData(fd);
+    const data = { ...tenantData(fd), smsConsentAt: undefined as Date | undefined };
     const before = await db.tenant.findUniqueOrThrow({ where: { id } });
+    if (data.smsConsent && !before.smsConsent) data.smsConsentAt = new Date();
     const emailChanged = (before.email ?? "").toLowerCase() !== (data.email ?? "").toLowerCase();
     // A new email means a new person could be on the other end: portal access must be re-sent.
     await db.tenant.update({ where: { id }, data: emailChanged && before.portalEnabled ? { ...data, portalEnabled: false, clerkUserId: null } : data });

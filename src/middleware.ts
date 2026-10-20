@@ -1,8 +1,16 @@
 import { NextResponse } from "next/server";
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
-// Stripe calls the webhook directly (it's verified by signature, not by a Clerk session).
-const isPublic = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)", "/not-authorized", "/api/stripe/webhook"]);
+// Stripe and Twilio call their webhooks directly (verified by signature, not by a Clerk session).
+// The calendar feed is protected by its own secret token so calendar apps can subscribe.
+const isPublic = createRouteMatcher([
+  "/sign-in(.*)",
+  "/sign-up(.*)",
+  "/not-authorized",
+  "/api/stripe/webhook",
+  "/api/twilio/(.*)",
+  "/api/calendar/feed",
+]);
 
 export default clerkMiddleware(async (auth, req) => {
   if (!isPublic(req)) await auth.protect();

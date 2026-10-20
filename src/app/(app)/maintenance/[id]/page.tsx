@@ -4,6 +4,8 @@ import { db } from "@/lib/db";
 import { inForceLeaseWhere, tenantName } from "@/lib/queries";
 import { ActionForm } from "@/components/action-form";
 import { DocumentsPanel } from "@/components/documents-panel";
+import { NotesPanel } from "@/components/notes-panel";
+import { TasksPanel } from "@/components/tasks-panel";
 import { EnumSelect } from "@/components/enum-select";
 import { maintTone, priorityTone } from "@/components/unit-select";
 import { Badge, Card, CardBody, CardHeader, DetailList, Field, FormGrid, Input, PageHeader, Select, Textarea } from "@/components/ui";
@@ -94,6 +96,8 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
               />
             </CardBody>
           </Card>
+          <NotesPanel link={{ maintenanceId: id }} />
+          <TasksPanel link={{ maintenanceId: id }} />
           <DocumentsPanel link={{ maintenanceId: id }} defaultCategory="PHOTO" />
           <ActionForm action={deleteWorkOrder.bind(null, id)} submitLabel="Delete work order" submitVariant="danger" confirm="Delete this work order?" />
         </div>

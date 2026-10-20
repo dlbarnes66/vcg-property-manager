@@ -6,6 +6,9 @@ import { computeLeaseLedger } from "@/lib/ledger";
 import { tenantName } from "@/lib/queries";
 import { ActionForm } from "@/components/action-form";
 import { DocumentsPanel } from "@/components/documents-panel";
+import { TenantMessagesPanel } from "@/components/messages-panel";
+import { NotesPanel } from "@/components/notes-panel";
+import { TasksPanel } from "@/components/tasks-panel";
 import { inviteTenantToPortal, revokeTenantPortal } from "../actions";
 import { Badge, Card, CardBody, CardHeader, DetailList, Empty, LinkButton, PageHeader, Table, Td, Th } from "@/components/ui";
 import { fmtDate, money, titleCase } from "@/lib/utils";
@@ -82,6 +85,9 @@ export default async function TenantPage({ params }: { params: Promise<{ id: str
               </Table>
             )}
           </Card>
+          <TenantMessagesPanel tenant={tenant} />
+          <TasksPanel link={{ tenantId: id }} />
+          <NotesPanel link={{ tenantId: id }} />
           <DocumentsPanel link={{ tenantId: id }} defaultCategory="ID" />
         </div>
         <div className="flex flex-col gap-6">

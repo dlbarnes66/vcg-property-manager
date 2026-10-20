@@ -31,6 +31,20 @@ export function TenantForm({
           <input type="checkbox" name="isVeteran" defaultChecked={tenant?.isVeteran ?? true} className="size-4 accent-navy" />
           Veteran
         </label>
+        <label className="flex items-start gap-2 text-sm">
+          <input type="checkbox" name="smsConsent" defaultChecked={tenant?.smsConsent ?? false} className="mt-0.5 size-4 accent-navy" />
+          <span>
+            OK to text
+            <span className="block text-xs text-muted">Only tick this if the tenant agreed to receive texts (e.g. on their lease or application). They can reply STOP anytime.</span>
+          </span>
+        </label>
+        <label className="flex items-start gap-2 text-sm">
+          <input type="checkbox" name="emailOptOut" defaultChecked={tenant?.emailOptOut ?? false} className="mt-0.5 size-4 accent-navy" />
+          <span>
+            Leave out of email announcements
+            <span className="block text-xs text-muted">Direct emails about their account still go through.</span>
+          </span>
+        </label>
       </FormGrid>
 
       <div className="text-sm font-semibold">VA / HUD-VASH case manager</div>
