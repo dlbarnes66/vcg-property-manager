@@ -26,7 +26,7 @@ A "DoorLoop Lite" for VCG Veterans Housing Fund I: properties, units, tenants, l
 - **Maintenance**: work orders with priority, status, vendor, cost, and photos.
 - **Inspections**: HQS initial/annual, NSPIRE, re-inspections, move-in/out.
 - **Documents**: upload to any property, tenant, lease, or work order; library view with filters.
-- **Reports**: rent roll, delinquency aging (0–30 / 31–60 / 61–90 / 90+, split by payer), 12-month cash flow. Each exports to CSV.
+- **Reports**: 12 reports in four groups — HUD-VASH (HAP by housing authority, recert & inspection compliance, rent split & voucher mix), Investors (quarterly investor summary, property NOI, cash flow), Rent & collections (rent roll, delinquency aging, collections trend, vacancy loss), and Maintenance (work orders, spending by property & vendor). Every report filters by dates and property and downloads as a **PDF** or a **CSV** for Excel.
 - **Resident portal** (`/portal`): invited tenants see their balance and rent breakdown, pay by bank transfer, submit repair requests with photos, and download documents you share. See below.
 - **Leasing**: listings for vacant units with photos, a public rentals page (`/rentals`), a mobile-friendly application form with document upload, a screening checklist, approve/deny with recorded reasons, and one click to turn an approved applicant into a tenant + lease.
 - **Accounting**: double-entry books per property. Rent charges, payments, and bills post automatically; manual journal entries; bills & bill payments; bank CSV import, matching, and reconciliation; P&L, balance sheet, and trial balance with CSV export.
@@ -83,6 +83,15 @@ To clear demo data before entering real properties: `npm run db:seed -- --reset`
 - Each workflow acts at most once per tenant per situation (e.g. once per lease per late month), even if runs overlap or a day is missed. Tick **Ask me first** to send its actions to Approvals instead.
 - Texts only go to tenants marked OK to text; others are logged as skipped.
 - **Scheduling:** set `CRON_SECRET` and deploy to Vercel. `vercel.json` runs workflows every morning at 8 AM Eastern (12:00 UTC). For hourly runs, change the schedule to `0 * * * *` (requires Vercel Pro), or have any scheduler call `GET /api/cron/workflows` with header `Authorization: Bearer <CRON_SECRET>`. Locally, use **Run all now**.
+
+## Reports
+
+Open **Reports** and pick one. Use the date shortcuts (Last quarter, Year to date, …) or your own dates, and optionally a single property, then **PDF** or **CSV**.
+
+- **Investor summary** is the one to send Fund I investors each quarter. Type a short note in "Note to investors" and it prints at the top of the PDF. It's marked unaudited and uses the same accrual books as Accounting.
+- **Property performance** needs your mortgage payments recorded in Accounting to show debt service: a journal entry with Dr 5700 Mortgage Interest, Dr 2500 Mortgage Payable (principal), Cr 1000 Operating Bank, tagged with the property. Set each property's purchase price to get a cap rate.
+- **HAP by housing authority** and **Recert & inspection compliance** are the HUD-VASH ones: what each PHA owes and why it might be holding payment, and which households have a recert or inspection overdue.
+- The **AI Assistant** can run any report too ("What was NOI last quarter?") and links you to it.
 
 ## Leasing
 
@@ -204,10 +213,8 @@ In test mode, pick **Test Institution** in the bank-linking screen, and use the 
 - **AI extras:** let the assistant read uploaded documents (leases, HAP contracts); voice notes; tenant-facing AI help in the portal
 - **Leasing extras:** online screening reports (TransUnion SmartMove or similar), application fees, emailing applicants from the app
 - **Accounting extras:** live bank feeds (Plaid), owner statements, 1099s for vendors, budgets
-- **Phase 3:** AI Assistant, AI Agent, and Workflows (automation rules)
 - **Automated reminders** (email/SMS before the due date and when late), e.g. via SendGrid
-- **Owner/investor statements** per property for Fund I LP reporting
-- **Bank reconciliation / full double-entry accounting.** The cash-flow report is cash-basis and isn't a substitute for the fund's books kept by the fund administrator.
+- **Reports extras:** emailing reports on a schedule (e.g. the investor summary each quarter), charts, budget vs. actual, per-investor capital account statements
 - Multi-tenant SaaS (organizations), if this becomes a product for other HUD-VASH landlords
 
 ## Project layout
@@ -216,7 +223,11 @@ In test mode, pick **Test Institution** in the bank-linking screen, and use the 
 prisma/schema.prisma        data model (read this first)
 prisma/seed.ts              demo data
 src/lib/ledger.ts           rent run, late fees, balances, aging (the money logic)
-src/lib/reports.ts          rent roll, delinquency, cash flow, CSV
+src/lib/report-defs.ts      the report catalog (titles, columns, KPIs)
+src/lib/report-data.ts      the queries behind each report
+src/lib/report-math.ts      vacancy days, recert/inspection status, cap rate (pure, tested)
+src/lib/report-pdf.ts       PDF export (pdfkit)
+src/lib/reports.ts          rent roll, delinquency, cash flow
 src/lib/storage.ts          R2 / local file storage
 src/app/(app)/…             one folder per module: page.tsx + actions.ts
 src/app/portal/…            resident portal (tenant-facing)
@@ -229,5 +240,5 @@ src/lib/ai/                 Claude tool loop (assistant.ts) and the tools it can
 src/lib/agent-actions.ts    what the AI can propose, validation, and the approve → execute step
 src/lib/workflows.ts        workflow triggers, once-only firing, and actions
 src/lib/messaging.ts        who gets a message (consent / opt-out rules) and sending; messaging-providers.ts talks to SendGrid/Twilio
-tests/                      ledger, portal, payments, webhooks, tasks, calendar, messaging, accounting, leasing, AI, workflows
+tests/                      ledger, portal, payments, webhooks, tasks, calendar, messaging, accounting, leasing, AI, workflows, reports
 ```

@@ -6,6 +6,8 @@ import { computeLeaseLedger } from "../ledger";
 import { tenantName } from "../queries";
 import { delinquency, rentRoll } from "../reports";
 import { detailOf, proposeAction } from "../agent-actions";
+import { REPORTS, reportByKey } from "../report-defs";
+import { fmtCell, readParams } from "../report-kit";
 import { addDays, dateToInput, money, periodOf, toDate, todayUTC } from "../utils";
 
 /*
@@ -184,6 +186,40 @@ const read: Record<string, { def: Omit<ToolDef, "name">; run: Handler }> = {
       };
     },
   },
+  run_report: {
+    def: {
+      description:
+        "Run one of the app's reports and get its numbers. Reports: " +
+        REPORTS.map((r) => `${r.key} (${r.title}${r.mode === "asOf" ? ", as of a date" : ", date range"})`).join("; ") +
+        ". Dates YYYY-MM-DD; for as-of reports pass only `to`. Defaults vary by report (often year to date). Optional propertyId (from search).",
+      input_schema: {
+        type: "object",
+        properties: { report: { type: "string", enum: REPORTS.map((r) => r.key) }, from: { type: "string" }, to: { type: "string" }, propertyId: { type: "string" } },
+        required: ["report"],
+      },
+    },
+    run: async (i) => {
+      const def = reportByKey(String(i.report ?? ""));
+      if (!def) return { error: "Unknown report" };
+      const property = str(i.propertyId) ? await db.property.findUnique({ where: { id: str(i.propertyId)! }, select: { id: true, name: true } }) : null;
+      const p = readParams({ from: str(i.from), to: str(i.to), propertyId: property?.id }, def.defaultRange, () => property?.name ?? null);
+      if (def.mode === "asOf") p.from = p.to;
+      const r = await def.build(p);
+      const qs = new URLSearchParams({ from: dateToInput(p.from), to: dateToInput(p.to), ...(p.propertyId ? { propertyId: p.propertyId } : {}) });
+      return {
+        report: r.title, period: r.period, link: `/reports/${def.key}?${qs}`,
+        headline: r.kpis.map((k) => `${k.label}: ${k.value}${k.sub ? ` (${k.sub})` : ""}`),
+        tables: r.tables.map((t) => {
+          const cols = t.columns.filter((c) => c.fmt !== "bar");
+          return {
+            title: t.title, totalRows: t.rows.length,
+            rows: t.rows.slice(0, 40).map((row) => Object.fromEntries(cols.map((c) => [c.label || c.key, fmtCell(c.fmt, row[c.key])]))),
+          };
+        }),
+        notes: r.notes,
+      };
+    },
+  },
   applications: {
     def: { description: "Rental applications. Default: new, screening, and approved.", input_schema: { type: "object", properties: { status: { type: "string", enum: ["NEW", "SCREENING", "APPROVED", "DENIED", "WITHDRAWN", "CONVERTED"] } } } },
     run: async (i) =>
@@ -276,6 +312,7 @@ export const toolLabel = (name: string, input: Record<string, unknown>) =>
     tasks: "Checked tasks",
     financial_report: input.report === "bs" ? "Ran the balance sheet" : "Ran the profit & loss",
     applications: "Checked applications",
+    run_report: `Ran the ${reportByKey(String(input.report ?? ""))?.title.toLowerCase() ?? "report"} report`,
     recent_messages: "Read recent messages",
   })[name] ?? (isProposeTool(name) ? "Drafted an action for your approval" : name);
 
