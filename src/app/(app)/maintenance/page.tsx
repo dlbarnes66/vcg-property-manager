@@ -13,7 +13,7 @@ export default async function MaintenancePage({ searchParams }: { searchParams: 
   const orders = await db.maintenanceRequest.findMany({
     where: view === "all" ? undefined : { status: open ? { in: ["OPEN", "SCHEDULED", "IN_PROGRESS"] } : { in: ["COMPLETED", "CANCELLED"] } },
     orderBy: [{ reportedOn: open ? "asc" : "desc" }],
-    include: { unit: { include: { property: true } }, vendor: true },
+    include: { unit: { include: { property: true } }, vendor: true, submittedBy: true },
   });
   // Emergencies first when looking at open work
   const priorityRank = { EMERGENCY: 0, HIGH: 1, NORMAL: 2, LOW: 3 };
@@ -60,6 +60,11 @@ export default async function MaintenancePage({ searchParams }: { searchParams: 
                     <Link href={`/maintenance/${o.id}`} className="font-medium hover:underline">
                       {o.title}
                     </Link>
+                    {o.submittedBy && (
+                      <span className="ml-2">
+                        <Badge tone="navy">From tenant</Badge>
+                      </span>
+                    )}
                   </Td>
                   <Td className="text-muted">
                     {o.unit.property.name} · {o.unit.label}

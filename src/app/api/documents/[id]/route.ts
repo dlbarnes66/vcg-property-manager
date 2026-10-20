@@ -1,23 +1,20 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
 import { db } from "@/lib/db";
+import { getViewer } from "@/lib/auth";
+import { tenantDocumentWhere } from "@/lib/portal-data";
 import { getObject } from "@/lib/storage";
 
-// Streams (local) or redirects to a 5-minute signed URL (R2). Requires a signed-in session.
+// Streams (local) or redirects to a 5-minute signed URL (R2).
+// Admins can open any document; tenants only documents shared with them.
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { userId } = await auth();
-  if (!userId) return new NextResponse("Unauthorized", { status: 401 });
-  // Mirror requireAccess() email allow-list without redirecting
-  const allow = (process.env.ALLOWED_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
-  if (allow.length) {
-    const { currentUser } = await import("@clerk/nextjs/server");
-    const user = await currentUser();
-    if (!user?.emailAddresses.some((e) => allow.includes(e.emailAddress.toLowerCase())))
-      return new NextResponse("Forbidden", { status: 403 });
-  }
+  const viewer = await getViewer();
+  if (viewer.kind === "none") return new NextResponse(viewer.userId ? "Forbidden" : "Unauthorized", { status: viewer.userId ? 403 : 401 });
 
   const { id } = await params;
-  const doc = await db.document.findUnique({ where: { id } });
+  const doc =
+    viewer.kind === "admin"
+      ? await db.document.findUnique({ where: { id } })
+      : await db.document.findFirst({ where: { id, AND: [await tenantDocumentWhere(viewer.tenant.id)] } });
   if (!doc) return new NextResponse("Not found", { status: 404 });
 
   const obj = await getObject(doc.storageKey);
@@ -29,6 +26,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       "Content-Type": doc.mimeType,
       "Content-Disposition": `${download ? "attachment" : "inline"}; filename="${encodeURIComponent(doc.name)}"`,
       "Cache-Control": "private, no-store",
+      "X-Content-Type-Options": "nosniff",
     },
   });
 }

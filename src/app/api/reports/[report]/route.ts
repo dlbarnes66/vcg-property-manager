@@ -1,18 +1,13 @@
 import { NextResponse } from "next/server";
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { getViewer } from "@/lib/auth";
 import { cashFlow, delinquency, rentRoll, toCsv } from "@/lib/reports";
 import { dateToInput, todayUTC } from "@/lib/utils";
 
 const $ = (c: number | null) => (c == null ? "" : (c / 100).toFixed(2));
 
 export async function GET(_: Request, { params }: { params: Promise<{ report: string }> }) {
-  const { userId } = await auth();
-  if (!userId) return new NextResponse("Unauthorized", { status: 401 });
-  const allow = (process.env.ALLOWED_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
-  if (allow.length) {
-    const user = await currentUser();
-    if (!user?.emailAddresses.some((e) => allow.includes(e.emailAddress.toLowerCase()))) return new NextResponse("Forbidden", { status: 403 });
-  }
+  const viewer = await getViewer();
+  if (viewer.kind !== "admin") return new NextResponse("Forbidden", { status: viewer.userId ? 403 : 401 });
 
   const { report } = await params;
   let csv: string;

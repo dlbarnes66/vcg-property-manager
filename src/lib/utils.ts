@@ -82,7 +82,7 @@ export function titleCase(enumValue: string) {
   return enumValue
     .toLowerCase()
     .split("_")
-    .map((w) => (["hqs", "hap"].includes(w) ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1)))
+    .map((w) => (["hqs", "hap", "ach", "id"].includes(w) ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1)))
     .join(" ");
 }
 
@@ -94,4 +94,10 @@ export function str(v: FormDataEntryValue | null | undefined): string | null {
 
 export function partyLabel(p: "TENANT" | "HOUSING_AUTHORITY") {
   return p === "TENANT" ? "Tenant" : "Housing authority";
+}
+
+export function formatBytes(n: number) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }

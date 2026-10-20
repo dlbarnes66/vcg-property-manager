@@ -27,6 +27,7 @@ A "DoorLoop Lite" for VCG Veterans Housing Fund I: properties, units, tenants, l
 - **Inspections**: HQS initial/annual, NSPIRE, re-inspections, move-in/out.
 - **Documents**: upload to any property, tenant, lease, or work order; library view with filters.
 - **Reports**: rent roll, delinquency aging (0–30 / 31–60 / 61–90 / 90+, split by payer), 12-month cash flow. Each exports to CSV.
+- **Resident portal** (`/portal`): invited tenants see their balance and rent breakdown, pay by bank transfer, submit repair requests with photos, and download documents you share. See below.
 - **Directory**: housing authorities (with HAP per month and HAP past due per PHA) and vendors.
 
 All money is stored as integer cents. Dates are stored as UTC midnight so they never shift by a day.
@@ -42,16 +43,52 @@ All money is stored as integer cents. Dates are stored as UTC midnight so they n
 **2. Clerk:** create a **new** application at dashboard.clerk.com (separate from Grant Scout Pro). Under *Configure → Restrictions*, turn on **Restricted** sign-up mode so only people you invite can create accounts.
 
 **3. Configure and start:**
+Copy the env template, then fill in `DATABASE_URL`, the Clerk keys, and `ALLOWED_EMAILS`:
 ```bash
-cp .env.example .env        # then fill in DATABASE_URL, Clerk keys, ALLOWED_EMAILS
+cp .env.example .env
+```
+Install, create the tables, add optional fictional demo data, and start the app at http://localhost:3000:
+```bash
 npm install
-npx prisma migrate dev      # creates the tables
-npm run db:seed             # optional: fictional demo data to click around
-npm run dev                 # http://localhost:3000
+npx prisma migrate dev
+npm run db:seed
+npm run dev
 ```
 To clear demo data before entering real properties: `npm run db:seed -- --reset` (wipes **everything**; never run it against production).
 
 **4. Tests:** `npm test` runs the ledger math tests plus integration tests against your `DATABASE_URL` (point it at your dev database).
+
+## Resident portal
+
+Tenants sign in through the same Clerk app as you, but they land on `/portal` and can only ever see their own lease.
+
+**Who is who.** Anyone whose verified email is in `ALLOWED_EMAILS` is an admin. A tenant gets access only when you invite them: open the tenant, then **Resident portal → Invite to portal**. Clerk emails them a sign-up link (good for 14 days). Their account is tied to that tenant record and must keep the same email; if you change a tenant's email, their access turns off until you re-invite. **Turn off access** takes effect immediately.
+
+**What they see.** Their balance (tenant portion only; the HAP side never appears as something they owe), what they pay each month vs. what the housing authority pays, upcoming recertification, recent activity, and repair requests they've submitted.
+
+**Documents.** Nothing is visible to tenants unless you mark it **Share** (or tick "Show in tenant portal" when uploading). Lease uploads default to shared. A document shared on a property or unit is visible to whoever currently lives there, which is good for house rules and notices.
+
+**Repair requests** show up in Maintenance with a "From tenant" badge, the tenant's photos, and whether they gave permission to enter. Emergencies appear on your dashboard.
+
+**Clerk setup for the portal:** in your Clerk app, keep sign-up **Restricted** (invites still work) and set `NEXT_PUBLIC_APP_URL` to your site's address in production so invitation links point to the right place.
+
+## Online rent payments (Stripe)
+
+Tenants pay their portion by **ACH bank transfer** through Stripe Checkout. Stripe's fee for ACH is 0.8%, capped at $5. Cards are off by default; set `STRIPE_ALLOW_CARDS=true` to allow them (about 2.9% + 30¢).
+
+How it flows: the tenant enters an amount (up to what they owe) → links their bank in Stripe → the payment shows as **processing** for about 4 business days → when Stripe confirms the money, a payment is posted to the ledger automatically (method ACH, reference = Stripe payment ID). Failed transfers show on the tenant's home page and on the lease. A payment is never posted twice, even if Stripe sends the same notice several times.
+
+**Setup**
+1. Create a Stripe account and turn on **ACH Direct Debit** under Settings → Payment methods.
+2. Copy the **secret key** (Developers → API keys) into `STRIPE_SECRET_KEY`. Use the `sk_test_...` key while testing.
+3. Webhook:
+   - **Locally:** install the Stripe CLI (`brew install stripe/stripe-cli/stripe`), run `stripe login`, then `stripe listen --forward-to localhost:3000/api/stripe/webhook`. Put the `whsec_...` it prints into `STRIPE_WEBHOOK_SECRET`.
+   - **Production:** Developers → Webhooks → Add endpoint `https://YOUR-DOMAIN/api/stripe/webhook` with events `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, `checkout.session.expired`. Put its signing secret in `STRIPE_WEBHOOK_SECRET`.
+4. Restart `npm run dev`. The Pay button appears only when `STRIPE_SECRET_KEY` is set.
+
+If a webhook is ever missed, the app re-checks in-flight payments with Stripe when the tenant opens their portal.
+
+In test mode, pick **Test Institution** in the bank-linking screen, and use the "success" account to simulate a payment that clears.
 
 ## Monthly routine
 
@@ -70,13 +107,15 @@ To clear demo data before entering real properties: `npm run db:seed -- --reset`
 
 ## Security notes
 
-- Every page and server action checks the Clerk session **and** `ALLOWED_EMAILS`. Document downloads and CSV exports check the same.
+- Every admin page and server action requires an `ALLOWED_EMAILS` admin. Tenants are redirected to their portal, and every portal query is scoped to the signed-in tenant (never to an ID sent from the browser).
+- Document downloads: admins can open anything; tenants only documents shared with them. CSV exports are admin-only.
+- The Stripe webhook is verified by signature; unsigned or forged requests are rejected.
 - Tenant files can include IDs and income documents. Keep Clerk sign-up restricted, keep the R2 bucket private, and limit `ALLOWED_EMAILS` to people who need access.
-- This is single-owner software: everyone on the allow-list sees all properties.
+- Admins all see every property. Tenants see only their own lease.
 
-## Not in Phase 1 (natural next steps)
+## Not built yet (natural next steps)
 
-- **Tenant portal** and **online rent payments** (Stripe ACH for the tenant portion; PHAs pay by direct deposit)
+- **Notifications to you** when a tenant submits a repair or a payment fails (email/SMS)
 - **Automated reminders** (email/SMS before the due date and when late), e.g. via SendGrid
 - **Owner/investor statements** per property for Fund I LP reporting
 - **Bank reconciliation / full double-entry accounting.** The cash-flow report is cash-basis and isn't a substitute for the fund's books kept by the fund administrator.
@@ -89,8 +128,10 @@ prisma/schema.prisma        data model (read this first)
 prisma/seed.ts              demo data
 src/lib/ledger.ts           rent run, late fees, balances, aging (the money logic)
 src/lib/reports.ts          rent roll, delinquency, cash flow, CSV
-src/lib/auth.ts             Clerk + email allow-list gate
 src/lib/storage.ts          R2 / local file storage
 src/app/(app)/…             one folder per module: page.tsx + actions.ts
-tests/                      ledger unit tests + database integration tests
+src/app/portal/…            resident portal (tenant-facing)
+src/lib/auth.ts             who is an admin vs. a tenant
+src/lib/stripe.ts           Stripe checkout + payment sync; online-payments.ts posts to the ledger
+tests/                      ledger, portal isolation, payment posting, webhook signature tests
 ```

@@ -21,7 +21,7 @@ export function TenantForm({
         <Field label="Last name *">
           <Input name="lastName" defaultValue={tenant?.lastName} required />
         </Field>
-        <Field label="Email">
+        <Field label="Email" hint={tenant?.portalEnabled ? "Changing this turns off portal access until you re-invite them." : "Needed to invite them to the resident portal."}>
           <Input name="email" type="email" defaultValue={tenant?.email ?? ""} />
         </Field>
         <Field label="Phone">

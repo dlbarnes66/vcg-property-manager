@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
-const isPublic = createRouteMatcher(["/sign-in(.*)", "/not-authorized"]);
+// Stripe calls the webhook directly (it's verified by signature, not by a Clerk session).
+const isPublic = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)", "/not-authorized", "/api/stripe/webhook"]);
 
 export default clerkMiddleware(async (auth, req) => {
   if (!isPublic(req)) await auth.protect();

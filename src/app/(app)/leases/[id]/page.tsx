@@ -26,6 +26,7 @@ export default async function LeasePage({ params }: { params: Promise<{ id: stri
       housingAuthority: true,
       charges: { orderBy: { dueDate: "asc" } },
       payments: { orderBy: { paidOn: "asc" } },
+      onlinePayments: { where: { status: { in: ["PROCESSING", "FAILED"] } }, orderBy: { createdAt: "desc" }, take: 5 },
     },
   });
   if (!lease) notFound();
@@ -85,6 +86,25 @@ export default async function LeasePage({ params }: { params: Promise<{ id: stri
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="flex flex-col gap-6 lg:col-span-2">
+          {lease.onlinePayments.length > 0 && (
+            <Card>
+              <CardHeader title="Online payments" subtitle="Bank transfers post to the ledger automatically once they clear (usually about 4 business days)." />
+              <ul className="divide-y divide-line text-sm">
+                {lease.onlinePayments.map((op) => (
+                  <li key={op.id} className="flex items-center justify-between gap-3 px-5 py-2.5">
+                    <span className="text-muted">
+                      {fmtDate(op.createdAt)}
+                      {op.failureReason ? ` · ${op.failureReason}` : ""}
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <Badge tone={op.status === "FAILED" ? "red" : "blue"}>{op.status === "FAILED" ? "Failed" : "Processing"}</Badge>
+                      <span className="tabular font-medium">{money(op.amount)}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
           <Card>
             <CardHeader title="Ledger" subtitle="Running balance is per party: tenant and housing authority are tracked separately." />
             {ledger.length === 0 ? (
@@ -229,7 +249,7 @@ export default async function LeasePage({ params }: { params: Promise<{ id: stri
               </CardBody>
             </Card>
           )}
-          <DocumentsPanel link={{ leaseId: id }} defaultCategory="LEASE" />
+          <DocumentsPanel link={{ leaseId: id }} defaultCategory="LEASE" defaultShared />
         </div>
       </div>
     </>

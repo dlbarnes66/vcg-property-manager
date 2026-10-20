@@ -16,7 +16,7 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
   const [wo, vendors] = await Promise.all([
     db.maintenanceRequest.findUnique({
       where: { id },
-      include: { vendor: true, unit: { include: { property: true, leases: { where: inForceLeaseWhere(), include: { tenant: true } } } } },
+      include: { vendor: true, submittedBy: true, unit: { include: { property: true, leases: { where: inForceLeaseWhere(), include: { tenant: true } } } } },
     }),
     db.vendor.findMany({ orderBy: { name: "asc" } }),
   ]);
@@ -85,7 +85,8 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
             <CardBody>
               <DetailList
                 items={[
-                  ["Reported", fmtDate(wo.reportedOn)],
+                  ["Reported", `${fmtDate(wo.reportedOn)}${wo.submittedBy ? " · via resident portal" : ""}`],
+                  ["Permission to enter", wo.submittedBy ? (wo.permissionToEnter ? "Yes, OK to enter if not home" : "No, call to schedule") : "—"],
                   ["Resident", resident ? <Link key="r" href={`/tenants/${resident.id}`} className="hover:underline">{tenantName(resident)}</Link> : "Vacant"],
                   ["Resident phone", resident?.phone],
                   ["Vendor phone", wo.vendor?.phone],

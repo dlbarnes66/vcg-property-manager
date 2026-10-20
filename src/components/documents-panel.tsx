@@ -5,19 +5,24 @@ import { ActionForm } from "@/components/action-form";
 import { EnumSelect } from "@/components/enum-select";
 import { Badge, Card, CardHeader, Empty, Input } from "@/components/ui";
 import { DOC_CATEGORIES } from "@/lib/enums";
-import { fmtDate, titleCase } from "@/lib/utils";
-import { deleteDocument, uploadDocuments } from "@/app/(app)/documents/actions";
+import { fmtDate, formatBytes, titleCase } from "@/lib/utils";
+
+export { formatBytes };
+import { deleteDocument, toggleDocumentShare, uploadDocuments } from "@/app/(app)/documents/actions";
 
 type Link = Partial<Record<"propertyId" | "unitId" | "tenantId" | "leaseId" | "maintenanceId" | "inspectionId", string>>;
 
-export function formatBytes(n: number) {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
-  return `${(n / 1024 / 1024).toFixed(1)} MB`;
-}
 
 /** Drop-in documents list + upload box for any record (property, tenant, lease, work order, inspection). */
-export async function DocumentsPanel({ link, defaultCategory = "OTHER" }: { link: Link; defaultCategory?: string }) {
+export async function DocumentsPanel({
+  link,
+  defaultCategory = "OTHER",
+  defaultShared = false,
+}: {
+  link: Link;
+  defaultCategory?: string;
+  defaultShared?: boolean;
+}) {
   const docs = await db.document.findMany({ where: link, orderBy: { createdAt: "desc" } });
   const h = await headers();
   const returnPath = h.get("x-pathname") ?? "/documents";
@@ -38,9 +43,16 @@ export async function DocumentsPanel({ link, defaultCategory = "OTHER" }: { link
                 </a>
                 <div className="text-xs text-muted">
                   {fmtDate(d.createdAt)} · {formatBytes(d.size)}
+                  {d.uploadedByTenant && " · from tenant"}
                 </div>
               </div>
               <Badge>{titleCase(d.category)}</Badge>
+              <ActionForm
+                action={toggleDocumentShare.bind(null, d.id, returnPath)}
+                submitLabel={d.sharedWithTenant ? "Shared" : "Share"}
+                submitVariant={d.sharedWithTenant ? "secondary" : "ghost"}
+                inline
+              />
               <ActionForm action={deleteDocument.bind(null, d.id, returnPath)} submitLabel="Delete" submitVariant="ghost" confirm={`Delete ${d.name}?`} inline />
             </li>
           ))}
@@ -54,6 +66,10 @@ export async function DocumentsPanel({ link, defaultCategory = "OTHER" }: { link
           <input type="hidden" name="returnPath" value={returnPath} />
           <Input type="file" name="files" multiple className="h-auto py-1.5 file:mr-3 file:rounded file:border-0 file:bg-paper file:px-2 file:py-1 file:text-xs" />
           <EnumSelect name="category" values={DOC_CATEGORIES} defaultValue={defaultCategory} />
+          <label className="flex items-center gap-2 text-xs text-muted">
+            <input type="checkbox" name="sharedWithTenant" defaultChecked={defaultShared} className="accent-navy" />
+            Show in tenant portal
+          </label>
         </ActionForm>
       </div>
     </Card>

@@ -7,7 +7,7 @@ import { EnumSelect } from "@/components/enum-select";
 import { Badge, Card, CardBody, CardHeader, Empty, Field, Input, PageHeader, Table, Td, Th } from "@/components/ui";
 import { DOC_CATEGORIES } from "@/lib/enums";
 import { cn, fmtDate, titleCase } from "@/lib/utils";
-import { deleteDocument, uploadDocuments } from "./actions";
+import { deleteDocument, toggleDocumentShare, uploadDocuments } from "./actions";
 
 export const metadata = { title: "Documents" };
 
@@ -74,7 +74,12 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
                         </a>
                         <div className="pl-6 text-xs text-muted">{formatBytes(d.size)}</div>
                       </Td>
-                      <Td><Badge>{titleCase(d.category)}</Badge></Td>
+                      <Td>
+                        <div className="flex items-center gap-1.5">
+                          <Badge>{titleCase(d.category)}</Badge>
+                          <ActionForm action={toggleDocumentShare.bind(null, d.id, "/documents")} submitLabel={d.sharedWithTenant ? "Shared" : "Share"} submitVariant={d.sharedWithTenant ? "secondary" : "ghost"} inline />
+                        </div>
+                      </Td>
                       <Td className="text-muted">{l ? <Link href={l.href} className="hover:underline">{l.label}</Link> : "—"}</Td>
                       <Td className="whitespace-nowrap text-muted">{fmtDate(d.createdAt)}</Td>
                       <Td className="text-right">

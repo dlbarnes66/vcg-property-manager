@@ -3,7 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { requireAccess } from "@/lib/auth";
+import { clerkClient } from "@clerk/nextjs/server";
+import { isAdminEmail, requireAccess } from "@/lib/auth";
+import { appOrigin } from "@/lib/portal";
 import { toActionError, type ActionResult } from "@/lib/actions-util";
 import { bool, optStr, reqStr } from "@/lib/form";
 
@@ -39,7 +41,11 @@ export async function createTenant(_: ActionResult, fd: FormData): Promise<Actio
 export async function updateTenant(id: string, _: ActionResult, fd: FormData): Promise<ActionResult> {
   try {
     await requireAccess();
-    await db.tenant.update({ where: { id }, data: tenantData(fd) });
+    const data = tenantData(fd);
+    const before = await db.tenant.findUniqueOrThrow({ where: { id } });
+    const emailChanged = (before.email ?? "").toLowerCase() !== (data.email ?? "").toLowerCase();
+    // A new email means a new person could be on the other end: portal access must be re-sent.
+    await db.tenant.update({ where: { id }, data: emailChanged && before.portalEnabled ? { ...data, portalEnabled: false, clerkUserId: null } : data });
     revalidatePath(`/tenants/${id}`);
     redirect(`/tenants/${id}`);
   } catch (e) {
@@ -54,6 +60,73 @@ export async function deleteTenant(id: string, _: ActionResult): Promise<ActionR
     await db.tenant.delete({ where: { id } });
     revalidatePath("/tenants");
     redirect("/tenants");
+  } catch (e) {
+    return toActionError(e);
+  }
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Tenant portal access
+ * ------------------------------------------------------------------------------------------- */
+
+export async function inviteTenantToPortal(id: string, _: ActionResult): Promise<ActionResult> {
+  try {
+    await requireAccess();
+    const tenant = await db.tenant.findUniqueOrThrow({ where: { id } });
+    const email = tenant.email?.trim().toLowerCase();
+    if (!email) throw new Error("Add the tenant's email address first (Edit → Email).");
+    if (isAdminEmail(email)) throw new Error("That email is on your admin list (ALLOWED_EMAILS). Use a different address for the tenant.");
+    const clash = await db.tenant.findFirst({ where: { id: { not: id }, portalEnabled: true, email: { equals: email, mode: "insensitive" } } });
+    if (clash) throw new Error(`${clash.firstName} ${clash.lastName} already has portal access with this email. Each tenant needs their own email.`);
+
+    const clerk = await clerkClient();
+    const existing = await clerk.users.getUserList({ emailAddress: [email] });
+    const user = existing.data[0];
+
+    if (user) {
+      // They already have a Clerk account (e.g. signed up before): link it directly.
+      await clerk.users.updateUserMetadata(user.id, { publicMetadata: { tenantId: id } });
+      await db.tenant.update({ where: { id }, data: { portalEnabled: true, portalInvitedAt: new Date(), clerkUserId: user.id } });
+      revalidatePath(`/tenants/${id}`);
+      return { ok: true, message: `${email} already has an account, so access is turned on. They can sign in now at ${await appOrigin()}/sign-in.` };
+    }
+
+    // Revoke any older pending invite so only the newest link works.
+    const pending = await clerk.invitations.getInvitationList({ status: "pending", query: email });
+    for (const inv of pending.data) if (inv.emailAddress.toLowerCase() === email) await clerk.invitations.revokeInvitation(inv.id);
+
+    await clerk.invitations.createInvitation({
+      emailAddress: email,
+      publicMetadata: { tenantId: id },
+      redirectUrl: `${await appOrigin()}/sign-up`,
+      notify: true, // Clerk sends the invitation email
+      expiresInDays: 14,
+    });
+    await db.tenant.update({ where: { id }, data: { portalEnabled: true, portalInvitedAt: new Date(), clerkUserId: null } });
+    revalidatePath(`/tenants/${id}`);
+    return { ok: true, message: `Invitation emailed to ${email}. The link is good for 14 days.` };
+  } catch (e) {
+    return toActionError(e);
+  }
+}
+
+export async function revokeTenantPortal(id: string, _: ActionResult): Promise<ActionResult> {
+  try {
+    await requireAccess();
+    const tenant = await db.tenant.findUniqueOrThrow({ where: { id } });
+    // Turn off access in our database first: this alone blocks the portal immediately.
+    await db.tenant.update({ where: { id }, data: { portalEnabled: false, clerkUserId: null } });
+
+    const clerk = await clerkClient();
+    if (tenant.clerkUserId) {
+      await clerk.users.updateUserMetadata(tenant.clerkUserId, { publicMetadata: { tenantId: null } }).catch(() => undefined);
+    }
+    if (tenant.email) {
+      const pending = await clerk.invitations.getInvitationList({ status: "pending", query: tenant.email });
+      for (const inv of pending.data) if (inv.emailAddress.toLowerCase() === tenant.email.toLowerCase()) await clerk.invitations.revokeInvitation(inv.id);
+    }
+    revalidatePath(`/tenants/${id}`);
+    return { ok: true, message: "Portal access turned off." };
   } catch (e) {
     return toActionError(e);
   }

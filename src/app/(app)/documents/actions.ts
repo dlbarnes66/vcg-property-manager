@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireAccess } from "@/lib/auth";
 import { toActionError, type ActionResult } from "@/lib/actions-util";
-import { oneOf, optStr } from "@/lib/form";
+import { bool, oneOf, optStr } from "@/lib/form";
 import { DOC_CATEGORIES } from "@/lib/enums";
 import { deleteObject, putObject } from "@/lib/storage";
 
@@ -37,7 +37,7 @@ export async function uploadDocuments(_: ActionResult, fd: FormData): Promise<Ac
       const storageKey = `docs/${randomUUID()}/${safeName}`;
       await putObject(storageKey, Buffer.from(await f.arrayBuffer()), f.type);
       await db.document.create({
-        data: { name: f.name, category, storageKey, mimeType: f.type, size: f.size, ...link },
+        data: { name: f.name, category, storageKey, mimeType: f.type, size: f.size, sharedWithTenant: bool(fd, "sharedWithTenant"), ...link },
       });
     }
     revalidatePath(safeReturnPath(fd));
@@ -52,6 +52,18 @@ export async function deleteDocument(id: string, returnPath: string, _: ActionRe
     await requireAccess();
     const doc = await db.document.delete({ where: { id } });
     await deleteObject(doc.storageKey);
+    revalidatePath(returnPath.startsWith("/") ? returnPath : "/documents");
+    return { ok: true };
+  } catch (e) {
+    return toActionError(e);
+  }
+}
+
+export async function toggleDocumentShare(id: string, returnPath: string, _: ActionResult): Promise<ActionResult> {
+  try {
+    await requireAccess();
+    const doc = await db.document.findUniqueOrThrow({ where: { id } });
+    await db.document.update({ where: { id }, data: { sharedWithTenant: !doc.sharedWithTenant } });
     revalidatePath(returnPath.startsWith("/") ? returnPath : "/documents");
     return { ok: true };
   } catch (e) {

@@ -49,7 +49,7 @@ export function ActionForm({
       <div className={inline ? "flex flex-wrap items-end gap-3" : "flex flex-col gap-4"}>
         {children}
         <div className={inline ? "" : "flex items-center gap-3"}>
-          <Submit label={submitLabel} variant={submitVariant} size={inline ? "md" : "md"} />
+          <Submit label={submitLabel} variant={submitVariant} size={inline ? "sm" : "md"} />
           {!inline && <Status state={state} />}
         </div>
       </div>
@@ -65,7 +65,7 @@ function Status({ state, className }: { state: ActionResult; className?: string 
   return null;
 }
 
-function Submit({ label, variant, size }: { label: string; variant: "primary" | "secondary" | "danger" | "ghost"; size: "md" }) {
+function Submit({ label, variant, size }: { label: string; variant: "primary" | "secondary" | "danger" | "ghost"; size: "sm" | "md" }) {
   const { pending } = useFormStatus();
   return (
     <Button type="submit" variant={variant} size={size} disabled={pending}>

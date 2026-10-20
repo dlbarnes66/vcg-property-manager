@@ -4,7 +4,9 @@ import { Pencil, Plus } from "lucide-react";
 import { db } from "@/lib/db";
 import { computeLeaseLedger } from "@/lib/ledger";
 import { tenantName } from "@/lib/queries";
+import { ActionForm } from "@/components/action-form";
 import { DocumentsPanel } from "@/components/documents-panel";
+import { inviteTenantToPortal, revokeTenantPortal } from "../actions";
 import { Badge, Card, CardBody, CardHeader, DetailList, Empty, LinkButton, PageHeader, Table, Td, Th } from "@/components/ui";
 import { fmtDate, money, titleCase } from "@/lib/utils";
 
@@ -82,6 +84,29 @@ export default async function TenantPage({ params }: { params: Promise<{ id: str
           </Card>
           <DocumentsPanel link={{ tenantId: id }} defaultCategory="ID" />
         </div>
+        <div className="flex flex-col gap-6">
+        <Card>
+          <CardHeader title="Resident portal" subtitle="Lets the tenant see their balance, pay rent, and submit maintenance requests." />
+          <CardBody className="flex flex-col gap-3 text-sm">
+            {tenant.portalEnabled && tenant.clerkUserId ? (
+              <p><Badge tone="green">Active</Badge> <span className="text-muted">Signed in and linked{tenant.portalInvitedAt ? ` · invited ${fmtDate(tenant.portalInvitedAt)}` : ""}</span></p>
+            ) : tenant.portalEnabled ? (
+              <p><Badge tone="amber">Invited</Badge> <span className="text-muted">{tenant.portalInvitedAt ? `Sent ${fmtDate(tenant.portalInvitedAt)} to ${tenant.email}` : `Sent to ${tenant.email}`}. Waiting for them to sign up.</span></p>
+            ) : (
+              <p><Badge>Not invited</Badge></p>
+            )}
+            {!tenant.email && <p className="text-xs text-muted">Add an email address to this tenant before inviting them.</p>}
+            <ActionForm
+              action={inviteTenantToPortal.bind(null, id)}
+              submitLabel={tenant.portalEnabled ? (tenant.clerkUserId ? "Re-link account" : "Resend invitation") : "Invite to portal"}
+              submitVariant={tenant.portalEnabled ? "secondary" : "primary"}
+              confirm={tenant.email ? `Email a portal invitation to ${tenant.email}?` : undefined}
+            />
+            {tenant.portalEnabled && (
+              <ActionForm action={revokeTenantPortal.bind(null, id)} submitLabel="Turn off access" submitVariant="danger" confirm="Turn off this tenant's portal access?" />
+            )}
+          </CardBody>
+        </Card>
         <Card>
           <CardHeader title="Contact" />
           <CardBody className="flex flex-col gap-5">
@@ -97,6 +122,7 @@ export default async function TenantPage({ params }: { params: Promise<{ id: str
             {tenant.notes && <p className="text-sm whitespace-pre-wrap text-muted">{tenant.notes}</p>}
           </CardBody>
         </Card>
+        </div>
       </div>
     </>
   );
