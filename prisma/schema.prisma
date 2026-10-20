@@ -171,6 +171,7 @@ model Property {
   bills        Bill[]
   journalLines JournalLine[]
   workflows    Workflow[]
+  formDocs     FormDoc[]
 }
 
 model Unit {
@@ -194,6 +195,7 @@ model Unit {
   tasks       Task[]
   events      CalendarEvent[]
   listings    Listing[]
+  formDocs    FormDoc[]
 
   @@unique([propertyId, label])
 }
@@ -232,6 +234,7 @@ model Tenant {
   events              CalendarEvent[]
   messages            Message[]
   applications        Application[]
+  formDocs            FormDoc[]
 }
 
 // Public Housing Agency that pays the HAP (housing assistance payment) portion.
@@ -289,6 +292,7 @@ model Lease {
   tasks            Task[]
   events           CalendarEvent[]
   messages         Message[]
+  formDocs         FormDoc[]
 
   @@index([status])
 }
@@ -346,6 +350,7 @@ model Vendor {
   tasks       Task[]
   messages    Message[]
   bills       Bill[]
+  formDocs    FormDoc[]
 }
 
 model MaintenanceRequest {
@@ -413,14 +418,16 @@ model Document {
   applicationId    String?
   createdAt        DateTime         @default(now())
 
-  property    Property?           @relation(fields: [propertyId], references: [id], onDelete: SetNull)
-  unit        Unit?               @relation(fields: [unitId], references: [id], onDelete: SetNull)
-  tenant      Tenant?             @relation(fields: [tenantId], references: [id], onDelete: SetNull)
-  lease       Lease?              @relation(fields: [leaseId], references: [id], onDelete: SetNull)
-  maintenance MaintenanceRequest? @relation(fields: [maintenanceId], references: [id], onDelete: SetNull)
-  inspection  Inspection?         @relation(fields: [inspectionId], references: [id], onDelete: SetNull)
-  listing     Listing?            @relation(fields: [listingId], references: [id], onDelete: SetNull)
-  application Application?        @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  property     Property?           @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  unit         Unit?               @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  tenant       Tenant?             @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  lease        Lease?              @relation(fields: [leaseId], references: [id], onDelete: SetNull)
+  maintenance  MaintenanceRequest? @relation(fields: [maintenanceId], references: [id], onDelete: SetNull)
+  inspection   Inspection?         @relation(fields: [inspectionId], references: [id], onDelete: SetNull)
+  listing      Listing?            @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  application  Application?        @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  formDoc      FormDoc?            @relation("FormDocPdf")
+  formTemplate FormTemplate?       @relation("FormTemplateFile")
 }
 
 // A rent payment a tenant started in the portal. Becomes a ledger Payment only once Stripe confirms the money.
@@ -987,4 +994,86 @@ model WorkflowRun {
   workflow Workflow? @relation(fields: [workflowId], references: [id], onDelete: Cascade)
 
   @@index([startedAt])
+}
+
+// ---------------------------------------------------------------------------------------------
+// Phase 5: forms (AI-drafted leases, addenda, notices, checklists) and a per-state form library
+// ---------------------------------------------------------------------------------------------
+
+enum FormCategory {
+  LEASE
+  ADDENDUM
+  NOTICE
+  MOVE
+  VENDOR
+  OTHER
+}
+
+enum FormStatus {
+  DRAFT
+  FINAL
+}
+
+// One form being drafted or finished (markdown). Finishing it saves a PDF to Documents.
+model FormDoc {
+  id             String       @id @default(cuid())
+  title          String
+  formType       String // key from src/lib/forms/catalog.ts, or "custom"
+  state          String // two-letter code, e.g. "AL"
+  category       FormCategory
+  status         FormStatus   @default(DRAFT)
+  body           String       @default("")
+  reviewNotes    String? // the AI's "check before using" list; never printed
+  instructions   String?
+  tenantId       String?
+  leaseId        String?
+  propertyId     String?
+  unitId         String?
+  vendorId       String?
+  templateId     String?
+  documentId     String?      @unique // the saved PDF
+  model          String?
+  inputTokens    Int?
+  outputTokens   Int?
+  createdByEmail String?
+  finalizedAt    DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  tenant   Tenant?       @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  lease    Lease?        @relation(fields: [leaseId], references: [id], onDelete: SetNull)
+  property Property?     @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  unit     Unit?         @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  vendor   Vendor?       @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  template FormTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  document Document?     @relation("FormDocPdf", fields: [documentId], references: [id], onDelete: SetNull)
+
+  @@index([state, category])
+}
+
+// The state-by-state library: reusable text templates and uploaded forms (e.g. attorney-approved).
+model FormTemplate {
+  id             String       @id @default(cuid())
+  title          String
+  state          String // two-letter code, or "US" for forms that apply everywhere
+  category       FormCategory
+  formType       String?
+  description    String?
+  body           String? // markdown template
+  documentId     String?      @unique // or an uploaded file
+  createdByEmail String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  document Document? @relation("FormTemplateFile", fields: [documentId], references: [id], onDelete: SetNull)
+  forms    FormDoc[]
+
+  @@index([state, category])
+}
+
+// Small key/value settings (e.g. landlord details printed on forms).
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
 }

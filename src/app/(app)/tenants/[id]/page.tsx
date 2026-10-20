@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Pencil, Plus } from "lucide-react";
+import { Pencil, Plus, ScrollText } from "lucide-react";
 import { db } from "@/lib/db";
 import { computeLeaseLedger } from "@/lib/ledger";
 import { tenantName } from "@/lib/queries";
@@ -25,6 +25,7 @@ export default async function TenantPage({ params }: { params: Promise<{ id: str
     },
   });
   if (!tenant) notFound();
+  const lease = tenant.leases.find((l) => l.status === "ACTIVE") ?? tenant.leases[0];
 
   return (
     <>
@@ -34,6 +35,9 @@ export default async function TenantPage({ params }: { params: Promise<{ id: str
         back={{ href: "/tenants", label: "Tenants" }}
         actions={
           <>
+            <LinkButton href={lease ? `/forms/new?leaseId=${lease.id}` : `/forms/new?tenantId=${id}`} variant="secondary">
+              <ScrollText size={14} /> Create form
+            </LinkButton>
             <LinkButton href={`/tenants/${id}/edit`} variant="secondary">
               <Pencil size={14} /> Edit
             </LinkButton>

@@ -26,6 +26,7 @@ A "DoorLoop Lite" for VCG Veterans Housing Fund I: properties, units, tenants, l
 - **Maintenance**: work orders with priority, status, vendor, cost, and photos.
 - **Inspections**: HQS initial/annual, NSPIRE, re-inspections, move-in/out.
 - **Documents**: upload to any property, tenant, lease, or work order; library view with filters.
+- **Forms**: AI-drafted leases, addenda (voucher, pet, lead paint, mold, utilities…), notices (pay-or-quit, violation, entry, non-renewal, rent change), move-in/out checklists and deposit itemization, and vendor agreements, written for any of the 50 states + DC from your records. Edit, save as PDF to Documents, share to the tenant's portal, and keep approved versions in a library organized by state.
 - **Reports**: 12 reports in four groups — HUD-VASH (HAP by housing authority, recert & inspection compliance, rent split & voucher mix), Investors (quarterly investor summary, property NOI, cash flow), Rent & collections (rent roll, delinquency aging, collections trend, vacancy loss), and Maintenance (work orders, spending by property & vendor). Every report filters by dates and property and downloads as a **PDF** or a **CSV** for Excel.
 - **Resident portal** (`/portal`): invited tenants see their balance and rent breakdown, pay by bank transfer, submit repair requests with photos, and download documents you share. See below.
 - **Leasing**: listings for vacant units with photos, a public rentals page (`/rentals`), a mobile-friendly application form with document upload, a screening checklist, approve/deny with recorded reasons, and one click to turn an approved applicant into a tenant + lease.
@@ -83,6 +84,18 @@ To clear demo data before entering real properties: `npm run db:seed -- --reset`
 - Each workflow acts at most once per tenant per situation (e.g. once per lease per late month), even if runs overlap or a day is missed. Tick **Ask me first** to send its actions to Approvals instead.
 - Texts only go to tenants marked OK to text; others are logged as skipped.
 - **Scheduling:** set `CRON_SECRET` and deploy to Vercel. `vercel.json` runs workflows every morning at 8 AM Eastern (12:00 UTC). For hourly runs, change the schedule to `0 * * * *` (requires Vercel Pro), or have any scheduler call `GET /api/cron/workflows` with header `Authorization: Bearer <CRON_SECRET>`. Locally, use **Run all now**.
+
+## Forms
+
+1. **Forms → Landlord details**: enter the owner's legal name and notice address once. Every form uses them.
+2. **New form** (or **Create form** on a lease or tenant page): pick the form and the lease or tenant it's for. The state comes from the property's address (you can change it). Add anything specific, like "12-month term, water included," then **Draft with AI**. You'll see it being written; a full lease takes a minute or two.
+3. Review the **Check before using** list: blanks to fill in and state rules to verify. Edit the text directly or ask the AI to change something.
+4. **Finish & save PDF** saves it to Documents, linked to the tenant and lease. Tick **Share with the tenant** to put it in their portal. Editing later and clicking **Update PDF** replaces the saved copy.
+5. **Save to library** keeps the wording for that state. Once an attorney has approved a version, save it (or upload the attorney's file) to the state's library and start new forms from it.
+
+The **State** dropdown on the Forms page filters everything (your forms and the library) to one state, with the states you use listed first.
+
+AI drafts are a starting point, not legal advice. Landlord-tenant law differs by state and sometimes by city or county, and eviction-related notices must follow the state's process exactly. Have a local attorney review each type of form before first use. Without an Anthropic key you can still start from library templates or a blank page.
 
 ## Reports
 
@@ -223,6 +236,8 @@ In test mode, pick **Test Institution** in the bank-linking screen, and use the 
 prisma/schema.prisma        data model (read this first)
 prisma/seed.ts              demo data
 src/lib/ledger.ts           rent run, late fees, balances, aging (the money logic)
+src/lib/forms/              form catalog, AI drafting prompts, facts from records, Markdown → PDF
+src/lib/states.ts           the 50 states + DC
 src/lib/report-defs.ts      the report catalog (titles, columns, KPIs)
 src/lib/report-data.ts      the queries behind each report
 src/lib/report-math.ts      vacancy days, recert/inspection status, cap rate (pure, tested)
@@ -240,5 +255,5 @@ src/lib/ai/                 Claude tool loop (assistant.ts) and the tools it can
 src/lib/agent-actions.ts    what the AI can propose, validation, and the approve → execute step
 src/lib/workflows.ts        workflow triggers, once-only firing, and actions
 src/lib/messaging.ts        who gets a message (consent / opt-out rules) and sending; messaging-providers.ts talks to SendGrid/Twilio
-tests/                      ledger, portal, payments, webhooks, tasks, calendar, messaging, accounting, leasing, AI, workflows, reports
+tests/                      ledger, portal, payments, webhooks, tasks, calendar, messaging, accounting, leasing, AI, workflows, reports, forms
 ```
