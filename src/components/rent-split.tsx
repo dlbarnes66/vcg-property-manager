@@ -12,8 +12,8 @@ const toNum = (s: string) => {
  * Contract rent = tenant portion + HAP. Typing contract rent and tenant portion fills in HAP
  * automatically (the usual case: the PHA's rent determination letter gives you both numbers).
  */
-export function RentSplitFields({ defaults }: { defaults?: { contractRent: string; tenantPortion: string; hapAmount: string } }) {
-  const [contract, setContract] = useState(defaults?.contractRent ?? "");
+export function RentSplitFields({ defaults, initialContract }: { defaults?: { contractRent: string; tenantPortion: string; hapAmount: string }; initialContract?: string }) {
+  const [contract, setContract] = useState(defaults?.contractRent ?? initialContract ?? "");
   const [tenant, setTenant] = useState(defaults?.tenantPortion ?? "");
   const [hap, setHap] = useState(defaults?.hapAmount ?? "0.00");
   const [hapTouched, setHapTouched] = useState(Boolean(defaults));

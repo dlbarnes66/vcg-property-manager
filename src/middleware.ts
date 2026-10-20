@@ -10,6 +10,10 @@ const isPublic = createRouteMatcher([
   "/api/stripe/webhook",
   "/api/twilio/(.*)",
   "/api/calendar/feed",
+  // Public rentals pages and application form
+  "/rentals(.*)",
+  "/apply(.*)",
+  "/api/listing-photo/(.*)",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {

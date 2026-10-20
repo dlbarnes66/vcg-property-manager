@@ -4,7 +4,7 @@ import { createLease } from "../actions";
 
 export const metadata = { title: "New lease" };
 
-export default async function NewLeasePage({ searchParams }: { searchParams: Promise<{ unitId?: string; tenantId?: string }> }) {
+export default async function NewLeasePage({ searchParams }: { searchParams: Promise<{ unitId?: string; tenantId?: string; contractRent?: string; deposit?: string }> }) {
   const preset = await searchParams;
   return (
     <>

@@ -21,6 +21,19 @@ function monthsBack(n: number) {
 async function main() {
   if (process.argv.includes("--reset")) {
     if (process.env.NODE_ENV === "production") throw new Error("Refusing to reset in production");
+    await db.bankTransaction.deleteMany();
+    await db.reconciliation.deleteMany();
+    await db.journalEntry.deleteMany();
+    await db.billPayment.deleteMany();
+    await db.bill.deleteMany();
+    await db.message.deleteMany();
+    await db.messageTemplate.deleteMany();
+    await db.note.deleteMany();
+    await db.task.deleteMany();
+    await db.calendarEvent.deleteMany();
+    await db.application.deleteMany();
+    await db.listing.deleteMany();
+    await db.onlinePayment.deleteMany();
     await db.document.deleteMany();
     await db.payment.deleteMany();
     await db.charge.deleteMany();
@@ -114,7 +127,38 @@ async function main() {
   await db.inspection.create({ data: { unitId: units[3].id, type: "HQS_ANNUAL", scheduledDate: new Date(Date.now() + 12 * 86_400_000) } });
   await db.inspection.create({ data: { unitId: units[0].id, type: "HQS_INITIAL", scheduledDate: start, completedDate: start, result: "PASS" } });
 
-  console.log("Seeded demo data: 2 properties, 10 units, 7 leases (6 HUD-VASH), 3 work orders, 3 inspections.");
+  // Leasing: a live listing for a vacant unit, with one application
+  const vacant = units[5]; // Unit 202
+  const listing = await db.listing.create({
+    data: {
+      unitId: vacant.id, slug: "oak-ridge-202", status: "PUBLISHED", publishedAt: new Date(), headline: "Updated 1BR at Oak Ridge, vouchers welcome",
+      description: "Second-floor one-bedroom with new flooring, updated kitchen, and on-site laundry. Close to the VA clinic and bus line.",
+      rent: $(950), deposit: $(500), acceptsVouchers: true, utilitiesIncluded: "Water and trash", petPolicy: "Cats OK. Service and support animals always welcome.",
+    },
+  });
+  await db.application.create({
+    data: {
+      listingId: listing.id, firstName: "Kevin", lastName: "Price", email: "kevin.price@example.org", phone: "(251) 555-0150", isVeteran: true, householdSize: 1,
+      monthlyIncome: $(1450), incomeSource: "VA disability", hasVoucher: true, voucherType: "HUD-VASH", housingAuthorityName: "Gulf Coast Housing Authority (demo)",
+      caseManagerName: "VA HUD-VASH Team (demo)", caseManagerPhone: "(251) 555-0199", consentAt: new Date(),
+    },
+  });
+
+  // Accounting: opening bank balance and a paid repair bill (rent and payments post automatically)
+  await db.account.createMany({ data: (await import("../src/lib/accounting")).DEFAULT_CHART, skipDuplicates: true });
+  const acct = async (code: string) => (await db.account.findUniqueOrThrow({ where: { code } })).id;
+  await db.journalEntry.create({
+    data: {
+      date: d(`${months[0]}-01`), memo: "Opening balance", source: "MANUAL",
+      lines: { create: [{ accountId: await acct("1000"), debit: $(25000) }, { accountId: await acct("3000"), credit: $(25000) }] },
+    },
+  });
+  const bill = await db.bill.create({
+    data: { vendorId: vendor.id, propertyId: oak.id, expenseAccountId: await acct("5000"), billDate: d(`${months[2]}-12`), amount: $(85), description: "Replace smoke detector", status: "PAID" },
+  });
+  await db.billPayment.create({ data: { billId: bill.id, bankAccountId: await acct("1000"), date: d(`${months[2]}-14`), amount: $(85), method: "CHECK", reference: "1001" } });
+
+  console.log("Seeded demo data: 2 properties, 10 units, 7 leases (6 HUD-VASH), 3 work orders, 3 inspections, 1 live listing with an application, opening books.");
 }
 
 main().finally(() => db.$disconnect());

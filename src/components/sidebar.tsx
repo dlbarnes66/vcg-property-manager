@@ -6,11 +6,11 @@ import { useState } from "react";
 import { UserButton } from "@clerk/nextjs";
 import {
   LayoutDashboard, Building2, Users, FileSignature, Wallet, Wrench, ClipboardCheck, FolderOpen,
-  BarChart3, Landmark, HardHat, Menu, X, CalendarDays, ListChecks, MessagesSquare, NotebookPen,
+  BarChart3, Landmark, HardHat, Menu, X, CalendarDays, ListChecks, MessagesSquare, NotebookPen, KeyRound, Calculator,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; badge?: "tasks" | "messages" };
+type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; badge?: "tasks" | "messages" | "applications" };
 
 const sections: { title?: string; items: NavItem[] }[] = [
   {
@@ -26,8 +26,10 @@ const sections: { title?: string; items: NavItem[] }[] = [
     items: [
       { href: "/properties", label: "Properties", icon: Building2 },
       { href: "/tenants", label: "Tenants", icon: Users },
+      { href: "/leasing", label: "Leasing", icon: KeyRound, badge: "applications" },
       { href: "/leases", label: "Leases", icon: FileSignature },
       { href: "/payments", label: "Rent & Payments", icon: Wallet },
+      { href: "/accounting", label: "Accounting", icon: Calculator },
       { href: "/maintenance", label: "Maintenance", icon: Wrench },
       { href: "/inspections", label: "Inspections", icon: ClipboardCheck },
     ],
@@ -49,7 +51,7 @@ const sections: { title?: string; items: NavItem[] }[] = [
   },
 ];
 
-export function Sidebar({ counts = {} }: { counts?: { tasks?: number; messages?: number } }) {
+export function Sidebar({ counts = {} }: { counts?: { tasks?: number; messages?: number; applications?: number } }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));

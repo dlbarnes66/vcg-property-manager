@@ -10,7 +10,7 @@ import { fmtDate, formatBytes, titleCase } from "@/lib/utils";
 export { formatBytes };
 import { deleteDocument, toggleDocumentShare, uploadDocuments } from "@/app/(app)/documents/actions";
 
-type Link = Partial<Record<"propertyId" | "unitId" | "tenantId" | "leaseId" | "maintenanceId" | "inspectionId", string>>;
+type Link = Partial<Record<"propertyId" | "unitId" | "tenantId" | "leaseId" | "maintenanceId" | "inspectionId" | "listingId" | "applicationId", string>>;
 
 
 /** Drop-in documents list + upload box for any record (property, tenant, lease, work order, inspection). */
