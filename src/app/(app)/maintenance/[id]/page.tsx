@@ -8,7 +8,7 @@ import { NotesPanel } from "@/components/notes-panel";
 import { TasksPanel } from "@/components/tasks-panel";
 import { EnumSelect } from "@/components/enum-select";
 import { maintTone, priorityTone } from "@/components/unit-select";
-import { Badge, Card, CardBody, CardHeader, DetailList, Field, FormGrid, Input, PageHeader, Select, Textarea } from "@/components/ui";
+import { Badge, Card, CardBody, CardHeader, DetailList, Field, FormGrid, Input, LinkButton, PageHeader, Select, Textarea } from "@/components/ui";
 import { MAINT_PRIORITIES, MAINT_STATUSES } from "@/lib/enums";
 import { centsToInput, dateToInput, fmtDate, titleCase } from "@/lib/utils";
 import { deleteWorkOrder, updateWorkOrder } from "../actions";
@@ -96,6 +96,7 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
               />
             </CardBody>
           </Card>
+          <LinkButton href={`/accounting/bills?maintenanceId=${id}`} variant="secondary">Enter the bill for this repair</LinkButton>
           <NotesPanel link={{ maintenanceId: id }} />
           <TasksPanel link={{ maintenanceId: id }} />
           <DocumentsPanel link={{ maintenanceId: id }} defaultCategory="PHOTO" />

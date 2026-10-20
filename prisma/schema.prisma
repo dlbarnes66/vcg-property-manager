@@ -162,12 +162,15 @@ model Property {
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 
-  units       Unit[]
-  documents   Document[]
-  noteEntries Note[]
-  tasks       Task[]
-  events      CalendarEvent[]
-  messages    Message[]
+  units        Unit[]
+  documents    Document[]
+  noteEntries  Note[]
+  tasks        Task[]
+  events       CalendarEvent[]
+  messages     Message[]
+  bills        Bill[]
+  journalLines JournalLine[]
+  workflows    Workflow[]
 }
 
 model Unit {
@@ -190,6 +193,7 @@ model Unit {
   noteEntries Note[]
   tasks       Task[]
   events      CalendarEvent[]
+  listings    Listing[]
 
   @@unique([propertyId, label])
 }
@@ -227,6 +231,7 @@ model Tenant {
   tasks               Task[]
   events              CalendarEvent[]
   messages            Message[]
+  applications        Application[]
 }
 
 // Public Housing Agency that pays the HAP (housing assistance payment) portion.
@@ -300,7 +305,8 @@ model Charge {
   description String?
   createdAt   DateTime   @default(now())
 
-  lease Lease @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+  lease        Lease         @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+  journalEntry JournalEntry?
 
   @@unique([leaseId, type, party, period])
   @@index([dueDate])
@@ -320,6 +326,7 @@ model Payment {
 
   lease         Lease          @relation(fields: [leaseId], references: [id], onDelete: Cascade)
   onlinePayment OnlinePayment?
+  journalEntry  JournalEntry?
 
   @@index([paidOn])
 }
@@ -338,6 +345,7 @@ model Vendor {
   noteEntries Note[]
   tasks       Task[]
   messages    Message[]
+  bills       Bill[]
 }
 
 model MaintenanceRequest {
@@ -364,6 +372,7 @@ model MaintenanceRequest {
   noteEntries Note[]
   tasks       Task[]
   messages    Message[]
+  bills       Bill[]
 
   @@index([status])
 }
@@ -400,6 +409,8 @@ model Document {
   leaseId          String?
   maintenanceId    String?
   inspectionId     String?
+  listingId        String?
+  applicationId    String?
   createdAt        DateTime         @default(now())
 
   property    Property?           @relation(fields: [propertyId], references: [id], onDelete: SetNull)
@@ -408,6 +419,8 @@ model Document {
   lease       Lease?              @relation(fields: [leaseId], references: [id], onDelete: SetNull)
   maintenance MaintenanceRequest? @relation(fields: [maintenanceId], references: [id], onDelete: SetNull)
   inspection  Inspection?         @relation(fields: [inspectionId], references: [id], onDelete: SetNull)
+  listing     Listing?            @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  application Application?        @relation(fields: [applicationId], references: [id], onDelete: SetNull)
 }
 
 // A rent payment a tenant started in the portal. Becomes a ledger Payment only once Stripe confirms the money.
@@ -564,4 +577,414 @@ model MessageTemplate {
   body      String // supports {{firstName}}, {{lastName}}, {{property}}, {{unit}}, {{balance}}, {{rent}}, {{dueDate}}
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
+  workflows Workflow[]
+}
+
+// ---------------------------------------------------------------------------------------------
+// Phase 2: leasing
+// ---------------------------------------------------------------------------------------------
+
+enum ListingStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+}
+
+enum ApplicationStatus {
+  NEW
+  SCREENING
+  APPROVED
+  DENIED
+  WITHDRAWN
+  CONVERTED // became a tenant
+}
+
+// A vacant unit advertised on the public /rentals page.
+model Listing {
+  id                String        @id @default(cuid())
+  unitId            String
+  slug              String        @unique // public link: /apply/<slug>
+  status            ListingStatus @default(DRAFT)
+  headline          String
+  description       String?
+  rent              Int // cents, advertised contract rent
+  deposit           Int           @default(0) // cents
+  availableDate     DateTime?
+  acceptsVouchers   Boolean       @default(true)
+  petPolicy         String?
+  utilitiesIncluded String?
+  publishedAt       DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  unit         Unit          @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  applications Application[]
+  documents    Document[] // photos (shown publicly only while the listing is published)
+
+  @@index([status])
+}
+
+model Application {
+  id                   String            @id @default(cuid())
+  listingId            String
+  status               ApplicationStatus @default(NEW)
+  firstName            String
+  lastName             String
+  email                String
+  phone                String
+  isVeteran            Boolean?
+  householdSize        Int               @default(1)
+  desiredMoveIn        DateTime?
+  currentAddress       String?
+  currentLandlord      String?
+  currentLandlordPhone String?
+  monthlyIncome        Int? // cents
+  incomeSource         String?
+  employer             String?
+  hasVoucher           Boolean           @default(false)
+  voucherType          String? // HUD-VASH, HCV, other
+  housingAuthorityName String?
+  caseManagerName      String?
+  caseManagerPhone     String?
+  caseManagerEmail     String?
+  pets                 String?
+  additionalInfo       String?
+  consentAt            DateTime // applicant agreed the information is accurate and may be verified
+  // Screening checklist (manual)
+  idVerified           Boolean           @default(false)
+  incomeVerified       Boolean           @default(false)
+  voucherVerified      Boolean           @default(false)
+  referenceChecked     Boolean           @default(false)
+  backgroundReviewed   Boolean           @default(false)
+  screeningNotes       String?
+  decisionReason       String?
+  decidedAt            DateTime?
+  decidedByEmail       String?
+  tenantId             String? // set when converted
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  listing   Listing    @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  tenant    Tenant?    @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  documents Document[]
+
+  @@index([status, createdAt])
+  @@index([email])
+}
+
+// ---------------------------------------------------------------------------------------------
+// Phase 2: accounting (double-entry). Amounts in cents. Every entry's debits equal its credits.
+// ---------------------------------------------------------------------------------------------
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  INCOME
+  EXPENSE
+}
+
+enum EntrySource {
+  MANUAL
+  CHARGE // posted automatically from a lease charge
+  PAYMENT // posted automatically from a payment received
+  BILL
+  BILL_PAYMENT
+  BANK // created while categorizing an imported bank transaction
+}
+
+enum BillStatus {
+  OPEN
+  PAID
+  VOID
+}
+
+enum BankTxnStatus {
+  UNMATCHED
+  MATCHED
+  EXCLUDED
+}
+
+model Account {
+  id          String      @id @default(cuid())
+  code        String      @unique // "1000"
+  name        String
+  type        AccountType
+  isBank      Boolean     @default(false) // can import statements / receive payments
+  isSystem    Boolean     @default(false) // used by automatic posting; can't be deleted
+  active      Boolean     @default(true)
+  description String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  lines            JournalLine[]
+  billsExpensed    Bill[]            @relation("BillExpenseAccount")
+  billPayments     BillPayment[]
+  bankTransactions BankTransaction[]
+  reconciliations  Reconciliation[]
+}
+
+model JournalEntry {
+  id             String      @id @default(cuid())
+  date           DateTime
+  memo           String?
+  source         EntrySource @default(MANUAL)
+  chargeId       String?     @unique
+  paymentId      String?     @unique
+  billId         String?     @unique
+  billPaymentId  String?     @unique
+  createdByEmail String?
+  createdAt      DateTime    @default(now())
+
+  lines       JournalLine[]
+  charge      Charge?       @relation(fields: [chargeId], references: [id], onDelete: Cascade)
+  payment     Payment?      @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  bill        Bill?         @relation(fields: [billId], references: [id], onDelete: Cascade)
+  billPayment BillPayment?  @relation(fields: [billPaymentId], references: [id], onDelete: Cascade)
+
+  @@index([date])
+}
+
+model JournalLine {
+  id               String    @id @default(cuid())
+  entryId          String
+  accountId        String
+  debit            Int       @default(0)
+  credit           Int       @default(0)
+  propertyId       String?
+  memo             String?
+  clearedAt        DateTime? // matched to a bank transaction or marked cleared
+  reconciliationId String?
+  createdAt        DateTime  @default(now())
+
+  entry           JournalEntry     @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  account         Account          @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  property        Property?        @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  reconciliation  Reconciliation?  @relation(fields: [reconciliationId], references: [id], onDelete: SetNull)
+  bankTransaction BankTransaction?
+
+  @@index([accountId])
+  @@index([propertyId])
+}
+
+model Bill {
+  id               String     @id @default(cuid())
+  vendorId         String?
+  payee            String? // when not a saved vendor
+  propertyId       String?
+  maintenanceId    String?
+  expenseAccountId String
+  billDate         DateTime
+  dueDate          DateTime?
+  amount           Int // cents
+  description      String
+  reference        String? // invoice #
+  status           BillStatus @default(OPEN)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  vendor         Vendor?             @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  property       Property?           @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  maintenance    MaintenanceRequest? @relation(fields: [maintenanceId], references: [id], onDelete: SetNull)
+  expenseAccount Account             @relation("BillExpenseAccount", fields: [expenseAccountId], references: [id], onDelete: Restrict)
+  payments       BillPayment[]
+  journalEntry   JournalEntry?
+
+  @@index([status, dueDate])
+}
+
+model BillPayment {
+  id            String        @id @default(cuid())
+  billId        String
+  bankAccountId String
+  date          DateTime
+  amount        Int
+  method        PaymentMethod @default(ACH)
+  reference     String?
+  createdAt     DateTime      @default(now())
+
+  bill         Bill          @relation(fields: [billId], references: [id], onDelete: Cascade)
+  bankAccount  Account       @relation(fields: [bankAccountId], references: [id], onDelete: Restrict)
+  journalEntry JournalEntry?
+}
+
+// A line from an imported bank statement (CSV). Positive = money in, negative = money out.
+model BankTransaction {
+  id            String        @id @default(cuid())
+  accountId     String
+  date          DateTime
+  description   String
+  amount        Int
+  hash          String        @unique // dedupe re-imports of the same statement
+  status        BankTxnStatus @default(UNMATCHED)
+  matchedLineId String?       @unique
+  importBatch   String
+  createdAt     DateTime      @default(now())
+
+  account     Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  matchedLine JournalLine? @relation(fields: [matchedLineId], references: [id], onDelete: SetNull)
+
+  @@index([accountId, status, date])
+}
+
+model Reconciliation {
+  id               String   @id @default(cuid())
+  accountId        String
+  statementDate    DateTime
+  statementBalance Int
+  createdByEmail   String?
+  createdAt        DateTime @default(now())
+
+  account Account       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  lines   JournalLine[]
+}
+
+// ---------------------------------------------------------------------------------------------
+// Phase 3: AI assistant, agent actions (always approved by a person), workflows
+// ---------------------------------------------------------------------------------------------
+
+enum AiRole {
+  USER
+  ASSISTANT
+}
+
+enum AgentActionKind {
+  SEND_MESSAGE
+  CREATE_TASK
+  CREATE_WORK_ORDER
+  ADD_NOTE
+  RECORD_PAYMENT
+  POST_RENT
+  APPLY_LATE_FEES
+}
+
+enum AgentActionStatus {
+  PROPOSED
+  EXECUTED
+  REJECTED
+  FAILED
+}
+
+enum WorkflowTrigger {
+  RENT_DUE_SOON // N days before rent is due
+  RENT_PAST_DUE // tenant still owes N days after the due date
+  LEASE_ENDING // N days before a lease ends
+  RECERT_DUE // N days before annual recertification
+  INSPECTION_UPCOMING // N days before a scheduled inspection
+  INSPECTION_FAILED
+  APPLICATION_RECEIVED
+  WORK_ORDER_CREATED
+  MONTHLY // on day N of each month
+}
+
+enum WorkflowAction {
+  SEND_TEMPLATE // email or text a tenant using a template
+  CREATE_TASK
+  NOTIFY_ME // email to MANAGER_EMAIL (falls back to a task)
+  POST_RENT
+  APPLY_LATE_FEES
+}
+
+model AiConversation {
+  id             String   @id @default(cuid())
+  title          String
+  createdByEmail String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  messages AiMessage[]
+  actions  AgentAction[]
+}
+
+model AiMessage {
+  id             String   @id @default(cuid())
+  conversationId String
+  role           AiRole
+  content        String
+  toolCalls      Json? // [{ name, input }] the assistant used for this answer (shown as "looked up …")
+  inputTokens    Int?
+  outputTokens   Int?
+  createdAt      DateTime @default(now())
+
+  conversation AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
+// Something the AI (or a workflow set to "ask first") wants to do. Nothing runs until a person approves it.
+model AgentAction {
+  id             String            @id @default(cuid())
+  kind           AgentActionKind
+  status         AgentActionStatus @default(PROPOSED)
+  summary        String // plain-English description shown on the approval card
+  payload        Json // validated parameters for the executor
+  reason         String? // why the AI proposed it
+  proposedBy     String // "assistant", "daily-review", or "workflow:<name>"
+  conversationId String?
+  workflowId     String?
+  result         String?
+  error          String?
+  decidedByEmail String?
+  decidedAt      DateTime?
+  createdAt      DateTime          @default(now())
+
+  conversation AiConversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  workflow     Workflow?       @relation(fields: [workflowId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+}
+
+model Workflow {
+  id              String          @id @default(cuid())
+  name            String
+  enabled         Boolean         @default(true)
+  trigger         WorkflowTrigger
+  days            Int             @default(0) // N for the trigger (days before/after, or day of month)
+  action          WorkflowAction
+  channel         MessageChannel? // SEND_TEMPLATE: EMAIL or SMS
+  templateId      String?
+  taskTitle       String? // CREATE_TASK / NOTIFY_ME text; merge fields allowed
+  taskDueInDays   Int             @default(1)
+  taskPriority    TaskPriority    @default(NORMAL)
+  requireApproval Boolean         @default(false) // queue actions for approval instead of doing them
+  propertyId      String? // limit to one property
+  lastRunAt       DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  template MessageTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  property Property?        @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  firings  WorkflowFiring[]
+  runs     WorkflowRun[]
+  actions  AgentAction[]
+}
+
+// Each workflow does its thing once per subject (e.g. once per lease per late month).
+model WorkflowFiring {
+  id         String   @id @default(cuid())
+  workflowId String
+  subjectKey String // e.g. "lease:abc:2026-10"
+  outcome    String // what happened
+  ok         Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@unique([workflowId, subjectKey])
+}
+
+model WorkflowRun {
+  id         String    @id @default(cuid())
+  workflowId String?
+  source     String // "schedule" or "manual"
+  matched    Int       @default(0)
+  fired      Int       @default(0)
+  failed     Int       @default(0)
+  error      String?
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  workflow Workflow? @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([startedAt])
 }

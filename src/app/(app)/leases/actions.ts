@@ -9,6 +9,7 @@ import { bool, oneOf, optDate, optInt, optMoney, optStr, reqDate, reqMoney, reqS
 import { CHARGE_TYPES, LEASE_STATUSES, PARTIES, PAYMENT_METHODS } from "@/lib/enums";
 import { dueDateFor, leaseCoversPeriod } from "@/lib/ledger";
 import { money, periodOf, todayUTC } from "@/lib/utils";
+import { assertNotReconciled } from "@/lib/accounting";
 
 function leaseData(fd: FormData) {
   const contractRent = reqMoney(fd, "contractRent", "Contract rent");
@@ -127,6 +128,7 @@ export async function endLease(id: string, _: ActionResult, fd: FormData): Promi
 export async function deleteLease(id: string, _: ActionResult): Promise<ActionResult> {
   try {
     await requireAccess();
+    await assertNotReconciled({ leaseId: id });
     if (await db.payment.count({ where: { leaseId: id } }))
       throw new Error("This lease has payments recorded. End it instead of deleting so your history stays intact.");
     await db.lease.delete({ where: { id } });
@@ -188,6 +190,7 @@ export async function recordPayment(leaseId: string | null, _: ActionResult, fd:
 export async function deleteCharge(id: string, _: ActionResult): Promise<ActionResult> {
   try {
     await requireAccess();
+    await assertNotReconciled({ chargeId: id });
     const c = await db.charge.delete({ where: { id } });
     revalidatePath(`/leases/${c.leaseId}`);
     return { ok: true };
@@ -199,6 +202,7 @@ export async function deleteCharge(id: string, _: ActionResult): Promise<ActionR
 export async function deletePayment(id: string, _: ActionResult): Promise<ActionResult> {
   try {
     await requireAccess();
+    await assertNotReconciled({ paymentId: id });
     const p = await db.payment.delete({ where: { id } });
     revalidatePath(`/leases/${p.leaseId}`);
     revalidatePath("/payments");

@@ -11,7 +11,7 @@ import { deleteObject, putObject } from "@/lib/storage";
 
 const MAX_BYTES = 20 * 1024 * 1024;
 const ALLOWED = /^(application\/pdf|image\/(png|jpe?g|webp|heic|heif|gif)|text\/(plain|csv)|application\/(msword|vnd\.openxmlformats-officedocument\..+|vnd\.ms-excel))$/;
-const LINK_KEYS = ["propertyId", "unitId", "tenantId", "leaseId", "maintenanceId", "inspectionId"] as const;
+const LINK_KEYS = ["propertyId", "unitId", "tenantId", "leaseId", "maintenanceId", "inspectionId", "listingId", "applicationId"] as const;
 
 function safeReturnPath(fd: FormData) {
   const p = optStr(fd, "returnPath") ?? "/documents";

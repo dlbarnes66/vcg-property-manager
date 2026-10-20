@@ -28,6 +28,11 @@ A "DoorLoop Lite" for VCG Veterans Housing Fund I: properties, units, tenants, l
 - **Documents**: upload to any property, tenant, lease, or work order; library view with filters.
 - **Reports**: rent roll, delinquency aging (0–30 / 31–60 / 61–90 / 90+, split by payer), 12-month cash flow. Each exports to CSV.
 - **Resident portal** (`/portal`): invited tenants see their balance and rent breakdown, pay by bank transfer, submit repair requests with photos, and download documents you share. See below.
+- **Leasing**: listings for vacant units with photos, a public rentals page (`/rentals`), a mobile-friendly application form with document upload, a screening checklist, approve/deny with recorded reasons, and one click to turn an approved applicant into a tenant + lease.
+- **Accounting**: double-entry books per property. Rent charges, payments, and bills post automatically; manual journal entries; bills & bill payments; bank CSV import, matching, and reconciliation; P&L, balance sheet, and trial balance with CSV export.
+- **AI Assistant**: ask questions in plain English ("who's behind on rent?", "how did Oak Ridge do last quarter?"). It answers from your live data and can draft messages, tasks, work orders, notes, and payments for you to approve.
+- **AI Agent & Approvals**: nothing the AI suggests happens until you click Approve; every decision is logged. An optional daily review briefs you each morning and proposes next steps.
+- **Workflows**: "when X, do Y" rules (rent reminders, past-due notices, recert and renewal tasks, failed-inspection tasks, posting rent on the 1st, late fees) that run automatically, each acting once per tenant/event, with Preview and an "ask me first" option.
 - **Calendar**: month view (agenda on phones) combining your own events with inspections, cure deadlines, scheduled repairs, lease starts/ends, recertifications, task due dates, and rent due days. Subscribe from Google/Apple/Outlook.
 - **Tasks**: due dates, priorities, repeating tasks (weekly → yearly), grouped by Overdue / Today / Next 7 days. Add them from any property, tenant, lease, or work order.
 - **Notes**: internal notes on properties, tenants, leases, and work orders, with pinning and a searchable Notes page. Tenants never see them.
@@ -61,6 +66,55 @@ npm run dev
 To clear demo data before entering real properties: `npm run db:seed -- --reset` (wipes **everything**; never run it against production).
 
 **4. Tests:** `npm test` runs the ledger math tests plus integration tests against your `DATABASE_URL` (point it at your dev database).
+
+## AI Assistant, Agent, and Workflows
+
+**Turn on the AI**
+1. Create an API key at console.anthropic.com (Settings → API Keys) and add billing.
+2. Set `ANTHROPIC_API_KEY` in `.env` and restart. It uses Claude Sonnet 5.5 by default; set `ANTHROPIC_MODEL=claude-opus-5-5` for the most capable model.
+3. Rough cost: a typical question uses 5–20K tokens, which is a few cents with Sonnet. You can set a monthly spend limit in the Anthropic console.
+
+**What the AI can and can't do.** It can read everything in the app (tenants, balances, work orders, applications, calendar, books) and *propose* actions: emails/texts, tasks, work orders, notes, recording a payment you mention, posting rent, applying late fees. Proposals appear as cards with the full text; **nothing happens until you click Approve**, and approving twice can't run something twice. It can't delete anything, move money, or edit leases. It treats tenant-written text (messages, applications, work orders) as information, never as instructions. All decisions are listed under **Approvals**.
+
+**Daily review.** On Approvals, **Run today's review** gives you a short briefing and up to 5 proposed actions. Set `AI_DAILY_REVIEW=true` to have it ready every morning.
+
+**Workflows**
+- Go to Communications → Templates → **Add starter templates**, then Workflows → **Add starter workflows**. They're added *off*. Click **Preview** to see exactly who each would affect today, then **Turn on**.
+- Each workflow acts at most once per tenant per situation (e.g. once per lease per late month), even if runs overlap or a day is missed. Tick **Ask me first** to send its actions to Approvals instead.
+- Texts only go to tenants marked OK to text; others are logged as skipped.
+- **Scheduling:** set `CRON_SECRET` and deploy to Vercel. `vercel.json` runs workflows every morning at 8 AM Eastern (12:00 UTC). For hourly runs, change the schedule to `0 * * * *` (requires Vercel Pro), or have any scheduler call `GET /api/cron/workflows` with header `Authorization: Bearer <CRON_SECRET>`. Locally, use **Run all now**.
+
+## Leasing
+
+1. **Leasing → New listing**: pick a vacant unit, set rent and deposit, then open the listing to add photos and **Publish**.
+2. Share the listing's application link (or your `/rentals` page). Applicants don't need an account. They can upload ID, income, and voucher paperwork, and **no SSN is collected**. Spam submissions are silently dropped, and one person can apply to a listing at most 3 times a day.
+3. Each application creates a high-priority task, and emails `MANAGER_EMAIL` if SendGrid is set up.
+4. On the application, work the **screening checklist**, then approve or deny. A denial requires a reason. Use the same written criteria for everyone; source of income (including vouchers) isn't a reason to deny, and if you deny based on a background or credit report, the applicant is owed an adverse action notice.
+5. **Create tenant & lease** copies the applicant (with their case manager) into Tenants, moves their documents over, closes the listing, and opens the lease form with the unit, rent, and deposit filled in.
+
+Applications you no longer need can be deleted, with their files, from the application page.
+
+## Accounting
+
+**How it works.** Accrual basis, double entry. You never re-type rent or payments; the books post them automatically:
+
+| When this happens | The books record |
+|---|---|
+| Rent / fee charged | Dr Accounts Receivable (tenant **or** housing authority) · Cr the matching income account |
+| Security deposit charged | Dr A/R – Tenants · Cr **Security Deposits Held** (a liability, not income) |
+| Payment received | Dr Operating Bank · Cr the A/R it pays down |
+| Bill entered | Dr the expense category · Cr Accounts Payable |
+| Bill paid | Dr Accounts Payable · Cr the bank account |
+
+Rent is split into **Rental Income – Tenant Portion (4000)** and **Rental Income – HAP (4010)**. Deleting a charge, payment, or bill removes its entry; editing or voiding a bill re-posts it. Anything in a finished bank reconciliation is locked.
+
+**Getting started**
+1. **Journal → New entry**: record opening balances. For example, Dr 1000 Operating Bank and Cr 3000 Owner's Equity for the cash on hand when you start. Tag lines with a property for per-property reports.
+2. **Bills**: enter contractor invoices, utilities, insurance, and taxes. From a work order, use **Enter the bill for this repair**.
+3. **Banking**: each month, download your bank's transactions as CSV and import them. Most are matched with one click to a payment or bill already in the books. Bank fees and autopays can be categorized right there. Then **Reconcile** against the statement's ending balance.
+4. **Financial reports**: P&L, balance sheet, and trial balance for any dates, for all properties or one, with CSV export for your fund administrator or CPA.
+
+The chart of accounts comes with sensible defaults. You can rename accounts and add your own, but built-in accounts keep their numbers because automatic posting depends on them. These books are for property operations; NAV keeps Fund I's official books.
 
 ## Calendar, tasks, and notes
 
@@ -147,7 +201,9 @@ In test mode, pick **Test Institution** in the bank-linking screen, and use the 
 ## Not built yet (natural next steps)
 
 - **Notifications to you** when a tenant submits a repair, texts in, or a payment fails
-- **Phase 2:** Leasing (listings, applicants, applications → lease) and full double-entry Accounting
+- **AI extras:** let the assistant read uploaded documents (leases, HAP contracts); voice notes; tenant-facing AI help in the portal
+- **Leasing extras:** online screening reports (TransUnion SmartMove or similar), application fees, emailing applicants from the app
+- **Accounting extras:** live bank feeds (Plaid), owner statements, 1099s for vendors, budgets
 - **Phase 3:** AI Assistant, AI Agent, and Workflows (automation rules)
 - **Automated reminders** (email/SMS before the due date and when late), e.g. via SendGrid
 - **Owner/investor statements** per property for Fund I LP reporting
@@ -167,6 +223,11 @@ src/app/portal/…            resident portal (tenant-facing)
 src/lib/auth.ts             who is an admin vs. a tenant
 src/lib/stripe.ts           Stripe checkout + payment sync; online-payments.ts posts to the ledger
 src/lib/calendar.ts         everything that shows on the calendar; ics.ts builds the subscription feed
+src/lib/accounting.ts       chart of accounts, automatic posting, statements; banking.ts imports/matches/reconciles
+src/lib/leasing.ts          public application intake and applicant → tenant conversion
+src/lib/ai/                 Claude tool loop (assistant.ts) and the tools it can use (tools.ts)
+src/lib/agent-actions.ts    what the AI can propose, validation, and the approve → execute step
+src/lib/workflows.ts        workflow triggers, once-only firing, and actions
 src/lib/messaging.ts        who gets a message (consent / opt-out rules) and sending; messaging-providers.ts talks to SendGrid/Twilio
-tests/                      ledger, portal isolation, payments, webhooks, tasks, calendar, messaging
+tests/                      ledger, portal, payments, webhooks, tasks, calendar, messaging, accounting, leasing, AI, workflows
 ```

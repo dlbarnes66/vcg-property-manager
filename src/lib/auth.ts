@@ -18,14 +18,8 @@ export type Viewer =
   | { kind: "tenant"; userId: string; tenant: Tenant }
   | { kind: "none"; userId: string | null };
 
-export function adminEmails() {
-  return (process.env.ALLOWED_EMAILS ?? "")
-    .split(",")
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean);
-}
-
-export const isAdminEmail = (email: string) => adminEmails().includes(email.trim().toLowerCase());
+export { adminEmails, isAdminEmail } from "./admins";
+import { adminEmails } from "./admins";
 
 /** Resolved once per request. */
 export const getViewer = cache(async (): Promise<Viewer> => {

@@ -17,7 +17,7 @@ export async function LeaseForm({
   action: (prev: ActionResult, fd: FormData) => Promise<ActionResult>;
   lease?: Lease;
   submitLabel: string;
-  preset?: { unitId?: string; tenantId?: string };
+  preset?: { unitId?: string; tenantId?: string; contractRent?: string; deposit?: string };
 }) {
   const [properties, tenants, has] = await Promise.all([
     db.property.findMany({ orderBy: { name: "asc" }, include: { units: { orderBy: { label: "asc" } } } }),
@@ -74,9 +74,10 @@ export async function LeaseForm({
               ? { contractRent: centsToInput(lease.contractRent), tenantPortion: centsToInput(lease.tenantPortion), hapAmount: centsToInput(lease.hapAmount) }
               : undefined
           }
+          initialContract={preset?.contractRent}
         />
         <Field label="Security deposit">
-          <Input name="securityDeposit" inputMode="decimal" defaultValue={centsToInput(lease?.securityDeposit ?? 0)} />
+          <Input name="securityDeposit" inputMode="decimal" defaultValue={lease ? centsToInput(lease.securityDeposit) : (preset?.deposit ?? "0.00")} />
         </Field>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Late fee (tenant only)">

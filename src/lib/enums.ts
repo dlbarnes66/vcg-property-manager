@@ -14,3 +14,4 @@ export const TASK_PRIORITIES = ["LOW", "NORMAL", "HIGH", "URGENT"] as const;
 export const RECURRENCES = ["NONE", "WEEKLY", "MONTHLY", "QUARTERLY", "YEARLY"] as const;
 export const EVENT_TYPES = ["MEETING", "SHOWING", "APPOINTMENT", "INSPECTION", "REMINDER", "OTHER"] as const;
 export const MESSAGE_CHANNELS = ["EMAIL", "SMS", "CALL", "OTHER"] as const;
+export const ACCOUNT_TYPES = ["ASSET", "LIABILITY", "EQUITY", "INCOME", "EXPENSE"] as const;
