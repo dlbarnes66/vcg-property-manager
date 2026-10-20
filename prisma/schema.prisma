@@ -170,6 +170,7 @@ model Property {
   messages     Message[]
   bills        Bill[]
   journalLines JournalLine[]
+  workflows    Workflow[]
 }
 
 model Unit {
@@ -576,6 +577,7 @@ model MessageTemplate {
   body      String // supports {{firstName}}, {{lastName}}, {{property}}, {{unit}}, {{balance}}, {{rent}}, {{dueDate}}
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
+  workflows Workflow[]
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -835,4 +837,154 @@ model Reconciliation {
 
   account Account       @relation(fields: [accountId], references: [id], onDelete: Cascade)
   lines   JournalLine[]
+}
+
+// ---------------------------------------------------------------------------------------------
+// Phase 3: AI assistant, agent actions (always approved by a person), workflows
+// ---------------------------------------------------------------------------------------------
+
+enum AiRole {
+  USER
+  ASSISTANT
+}
+
+enum AgentActionKind {
+  SEND_MESSAGE
+  CREATE_TASK
+  CREATE_WORK_ORDER
+  ADD_NOTE
+  RECORD_PAYMENT
+  POST_RENT
+  APPLY_LATE_FEES
+}
+
+enum AgentActionStatus {
+  PROPOSED
+  EXECUTED
+  REJECTED
+  FAILED
+}
+
+enum WorkflowTrigger {
+  RENT_DUE_SOON // N days before rent is due
+  RENT_PAST_DUE // tenant still owes N days after the due date
+  LEASE_ENDING // N days before a lease ends
+  RECERT_DUE // N days before annual recertification
+  INSPECTION_UPCOMING // N days before a scheduled inspection
+  INSPECTION_FAILED
+  APPLICATION_RECEIVED
+  WORK_ORDER_CREATED
+  MONTHLY // on day N of each month
+}
+
+enum WorkflowAction {
+  SEND_TEMPLATE // email or text a tenant using a template
+  CREATE_TASK
+  NOTIFY_ME // email to MANAGER_EMAIL (falls back to a task)
+  POST_RENT
+  APPLY_LATE_FEES
+}
+
+model AiConversation {
+  id             String   @id @default(cuid())
+  title          String
+  createdByEmail String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  messages AiMessage[]
+  actions  AgentAction[]
+}
+
+model AiMessage {
+  id             String   @id @default(cuid())
+  conversationId String
+  role           AiRole
+  content        String
+  toolCalls      Json? // [{ name, input }] the assistant used for this answer (shown as "looked up …")
+  inputTokens    Int?
+  outputTokens   Int?
+  createdAt      DateTime @default(now())
+
+  conversation AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
+// Something the AI (or a workflow set to "ask first") wants to do. Nothing runs until a person approves it.
+model AgentAction {
+  id             String            @id @default(cuid())
+  kind           AgentActionKind
+  status         AgentActionStatus @default(PROPOSED)
+  summary        String // plain-English description shown on the approval card
+  payload        Json // validated parameters for the executor
+  reason         String? // why the AI proposed it
+  proposedBy     String // "assistant", "daily-review", or "workflow:<name>"
+  conversationId String?
+  workflowId     String?
+  result         String?
+  error          String?
+  decidedByEmail String?
+  decidedAt      DateTime?
+  createdAt      DateTime          @default(now())
+
+  conversation AiConversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  workflow     Workflow?       @relation(fields: [workflowId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+}
+
+model Workflow {
+  id              String          @id @default(cuid())
+  name            String
+  enabled         Boolean         @default(true)
+  trigger         WorkflowTrigger
+  days            Int             @default(0) // N for the trigger (days before/after, or day of month)
+  action          WorkflowAction
+  channel         MessageChannel? // SEND_TEMPLATE: EMAIL or SMS
+  templateId      String?
+  taskTitle       String? // CREATE_TASK / NOTIFY_ME text; merge fields allowed
+  taskDueInDays   Int             @default(1)
+  taskPriority    TaskPriority    @default(NORMAL)
+  requireApproval Boolean         @default(false) // queue actions for approval instead of doing them
+  propertyId      String? // limit to one property
+  lastRunAt       DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  template MessageTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  property Property?        @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  firings  WorkflowFiring[]
+  runs     WorkflowRun[]
+  actions  AgentAction[]
+}
+
+// Each workflow does its thing once per subject (e.g. once per lease per late month).
+model WorkflowFiring {
+  id         String   @id @default(cuid())
+  workflowId String
+  subjectKey String // e.g. "lease:abc:2026-10"
+  outcome    String // what happened
+  ok         Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@unique([workflowId, subjectKey])
+}
+
+model WorkflowRun {
+  id         String    @id @default(cuid())
+  workflowId String?
+  source     String // "schedule" or "manual"
+  matched    Int       @default(0)
+  fired      Int       @default(0)
+  failed     Int       @default(0)
+  error      String?
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  workflow Workflow? @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([startedAt])
 }

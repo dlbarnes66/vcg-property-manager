@@ -30,6 +30,9 @@ A "DoorLoop Lite" for VCG Veterans Housing Fund I: properties, units, tenants, l
 - **Resident portal** (`/portal`): invited tenants see their balance and rent breakdown, pay by bank transfer, submit repair requests with photos, and download documents you share. See below.
 - **Leasing**: listings for vacant units with photos, a public rentals page (`/rentals`), a mobile-friendly application form with document upload, a screening checklist, approve/deny with recorded reasons, and one click to turn an approved applicant into a tenant + lease.
 - **Accounting**: double-entry books per property. Rent charges, payments, and bills post automatically; manual journal entries; bills & bill payments; bank CSV import, matching, and reconciliation; P&L, balance sheet, and trial balance with CSV export.
+- **AI Assistant**: ask questions in plain English ("who's behind on rent?", "how did Oak Ridge do last quarter?"). It answers from your live data and can draft messages, tasks, work orders, notes, and payments for you to approve.
+- **AI Agent & Approvals**: nothing the AI suggests happens until you click Approve; every decision is logged. An optional daily review briefs you each morning and proposes next steps.
+- **Workflows**: "when X, do Y" rules (rent reminders, past-due notices, recert and renewal tasks, failed-inspection tasks, posting rent on the 1st, late fees) that run automatically, each acting once per tenant/event, with Preview and an "ask me first" option.
 - **Calendar**: month view (agenda on phones) combining your own events with inspections, cure deadlines, scheduled repairs, lease starts/ends, recertifications, task due dates, and rent due days. Subscribe from Google/Apple/Outlook.
 - **Tasks**: due dates, priorities, repeating tasks (weekly → yearly), grouped by Overdue / Today / Next 7 days. Add them from any property, tenant, lease, or work order.
 - **Notes**: internal notes on properties, tenants, leases, and work orders, with pinning and a searchable Notes page. Tenants never see them.
@@ -63,6 +66,23 @@ npm run dev
 To clear demo data before entering real properties: `npm run db:seed -- --reset` (wipes **everything**; never run it against production).
 
 **4. Tests:** `npm test` runs the ledger math tests plus integration tests against your `DATABASE_URL` (point it at your dev database).
+
+## AI Assistant, Agent, and Workflows
+
+**Turn on the AI**
+1. Create an API key at console.anthropic.com (Settings → API Keys) and add billing.
+2. Set `ANTHROPIC_API_KEY` in `.env` and restart. It uses Claude Sonnet 5.5 by default; set `ANTHROPIC_MODEL=claude-opus-5-5` for the most capable model.
+3. Rough cost: a typical question uses 5–20K tokens, which is a few cents with Sonnet. You can set a monthly spend limit in the Anthropic console.
+
+**What the AI can and can't do.** It can read everything in the app (tenants, balances, work orders, applications, calendar, books) and *propose* actions: emails/texts, tasks, work orders, notes, recording a payment you mention, posting rent, applying late fees. Proposals appear as cards with the full text; **nothing happens until you click Approve**, and approving twice can't run something twice. It can't delete anything, move money, or edit leases. It treats tenant-written text (messages, applications, work orders) as information, never as instructions. All decisions are listed under **Approvals**.
+
+**Daily review.** On Approvals, **Run today's review** gives you a short briefing and up to 5 proposed actions. Set `AI_DAILY_REVIEW=true` to have it ready every morning.
+
+**Workflows**
+- Go to Communications → Templates → **Add starter templates**, then Workflows → **Add starter workflows**. They're added *off*. Click **Preview** to see exactly who each would affect today, then **Turn on**.
+- Each workflow acts at most once per tenant per situation (e.g. once per lease per late month), even if runs overlap or a day is missed. Tick **Ask me first** to send its actions to Approvals instead.
+- Texts only go to tenants marked OK to text; others are logged as skipped.
+- **Scheduling:** set `CRON_SECRET` and deploy to Vercel. `vercel.json` runs workflows every morning at 8 AM Eastern (12:00 UTC). For hourly runs, change the schedule to `0 * * * *` (requires Vercel Pro), or have any scheduler call `GET /api/cron/workflows` with header `Authorization: Bearer <CRON_SECRET>`. Locally, use **Run all now**.
 
 ## Leasing
 
@@ -181,6 +201,7 @@ In test mode, pick **Test Institution** in the bank-linking screen, and use the 
 ## Not built yet (natural next steps)
 
 - **Notifications to you** when a tenant submits a repair, texts in, or a payment fails
+- **AI extras:** let the assistant read uploaded documents (leases, HAP contracts); voice notes; tenant-facing AI help in the portal
 - **Leasing extras:** online screening reports (TransUnion SmartMove or similar), application fees, emailing applicants from the app
 - **Accounting extras:** live bank feeds (Plaid), owner statements, 1099s for vendors, budgets
 - **Phase 3:** AI Assistant, AI Agent, and Workflows (automation rules)
@@ -204,6 +225,9 @@ src/lib/stripe.ts           Stripe checkout + payment sync; online-payments.ts p
 src/lib/calendar.ts         everything that shows on the calendar; ics.ts builds the subscription feed
 src/lib/accounting.ts       chart of accounts, automatic posting, statements; banking.ts imports/matches/reconciles
 src/lib/leasing.ts          public application intake and applicant → tenant conversion
+src/lib/ai/                 Claude tool loop (assistant.ts) and the tools it can use (tools.ts)
+src/lib/agent-actions.ts    what the AI can propose, validation, and the approve → execute step
+src/lib/workflows.ts        workflow triggers, once-only firing, and actions
 src/lib/messaging.ts        who gets a message (consent / opt-out rules) and sending; messaging-providers.ts talks to SendGrid/Twilio
-tests/                      ledger, portal, payments, webhooks, tasks, calendar, messaging, accounting, leasing
+tests/                      ledger, portal, payments, webhooks, tasks, calendar, messaging, accounting, leasing, AI, workflows
 ```

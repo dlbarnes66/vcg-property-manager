@@ -6,11 +6,11 @@ import { useState } from "react";
 import { UserButton } from "@clerk/nextjs";
 import {
   LayoutDashboard, Building2, Users, FileSignature, Wallet, Wrench, ClipboardCheck, FolderOpen,
-  BarChart3, Landmark, HardHat, Menu, X, CalendarDays, ListChecks, MessagesSquare, NotebookPen, KeyRound, Calculator,
+  BarChart3, Landmark, HardHat, Menu, X, CalendarDays, ListChecks, MessagesSquare, NotebookPen, KeyRound, Calculator, Bot, ShieldCheck, Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; badge?: "tasks" | "messages" | "applications" };
+type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; badge?: "tasks" | "messages" | "applications" | "approvals" };
 
 const sections: { title?: string; items: NavItem[] }[] = [
   {
@@ -19,6 +19,14 @@ const sections: { title?: string; items: NavItem[] }[] = [
       { href: "/calendar", label: "Calendar", icon: CalendarDays },
       { href: "/tasks", label: "Tasks", icon: ListChecks, badge: "tasks" },
       { href: "/communications", label: "Communications", icon: MessagesSquare, badge: "messages" },
+    ],
+  },
+  {
+    title: "AI & AUTOMATION",
+    items: [
+      { href: "/assistant", label: "AI Assistant", icon: Bot },
+      { href: "/agent", label: "Approvals", icon: ShieldCheck, badge: "approvals" },
+      { href: "/workflows", label: "Workflows", icon: Zap },
     ],
   },
   {
@@ -51,7 +59,7 @@ const sections: { title?: string; items: NavItem[] }[] = [
   },
 ];
 
-export function Sidebar({ counts = {} }: { counts?: { tasks?: number; messages?: number; applications?: number } }) {
+export function Sidebar({ counts = {} }: { counts?: { tasks?: number; messages?: number; applications?: number; approvals?: number } }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
@@ -70,7 +78,7 @@ export function Sidebar({ counts = {} }: { counts?: { tasks?: number; messages?:
         <Icon size={16} strokeWidth={1.8} />
         {label}
         {badge && (counts[badge] ?? 0) > 0 && (
-          <span className={cn("ml-auto rounded-full px-1.5 text-[11px] font-semibold", badge === "messages" ? "bg-red-500 text-white" : "bg-gold text-navy")}>
+          <span className={cn("ml-auto rounded-full px-1.5 text-[11px] font-semibold", badge === "messages" || badge === "approvals" ? "bg-red-500 text-white" : "bg-gold text-navy")}>
             {counts[badge]}
           </span>
         )}

@@ -14,6 +14,8 @@ const isPublic = createRouteMatcher([
   "/rentals(.*)",
   "/apply(.*)",
   "/api/listing-photo/(.*)",
+  // Scheduler (protected by CRON_SECRET)
+  "/api/cron/(.*)",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
