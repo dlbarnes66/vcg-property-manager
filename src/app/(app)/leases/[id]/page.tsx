@@ -6,6 +6,8 @@ import { computeLeaseLedger } from "@/lib/ledger";
 import { tenantName } from "@/lib/queries";
 import { ActionForm } from "@/components/action-form";
 import { DocumentsPanel } from "@/components/documents-panel";
+import { NotesPanel } from "@/components/notes-panel";
+import { TasksPanel } from "@/components/tasks-panel";
 import { EnumSelect } from "@/components/enum-select";
 import {
   Badge, Card, CardBody, CardHeader, DetailList, Empty, Field, FormGrid, Input, LinkButton, PageHeader, Stat, Table, Td, Th,
@@ -249,6 +251,8 @@ export default async function LeasePage({ params }: { params: Promise<{ id: stri
               </CardBody>
             </Card>
           )}
+          <TasksPanel link={{ leaseId: id }} />
+          <NotesPanel link={{ leaseId: id }} />
           <DocumentsPanel link={{ leaseId: id }} defaultCategory="LEASE" defaultShared />
         </div>
       </div>

@@ -20,6 +20,7 @@ export function ActionForm({
   confirm,
   inline = false,
   submitVariant = "primary",
+  onSuccess,
 }: {
   action: Action;
   children?: React.ReactNode;
@@ -29,12 +30,15 @@ export function ActionForm({
   confirm?: string;
   inline?: boolean;
   submitVariant?: "primary" | "secondary" | "danger" | "ghost";
+  onSuccess?: () => void;
 }) {
   const [state, formAction] = useActionState(action, null);
   const ref = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     if (state?.ok && resetOnSuccess) ref.current?.reset();
+    if (state?.ok) onSuccess?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, resetOnSuccess]);
 
   return (

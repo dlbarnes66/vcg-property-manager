@@ -4,6 +4,8 @@ import { db } from "@/lib/db";
 import { delinquency, rentRoll } from "@/lib/reports";
 import { openFailures, tenantName } from "@/lib/queries";
 import { leaseCoversPeriod } from "@/lib/ledger";
+import { calendarItems, kindLabel } from "@/lib/calendar";
+import { fmtTime } from "@/lib/dates";
 import { Badge, Card, CardHeader, Empty, LinkButton, PageHeader, Stat } from "@/components/ui";
 import { addDays, daysBetween, fmtDate, money, periodBounds, periodLabel, periodOf, titleCase, todayUTC } from "@/lib/utils";
 
@@ -15,6 +17,11 @@ export default async function Dashboard() {
   const { start, end } = periodBounds(period);
   const soon = addDays(today, 60);
 
+  const [todayItems, dueTasks, unreadReplies] = await Promise.all([
+    calendarItems(today, today),
+    db.task.count({ where: { status: { not: "DONE" }, dueDate: { lte: today } } }),
+    db.message.count({ where: { direction: "INBOUND", readAt: null } }),
+  ]);
   const [roll, late, monthCharges, monthPayments, activeLeases, openWOs, inspections, propertyCount] = await Promise.all([
     rentRoll(today),
     delinquency(today),
@@ -92,6 +99,33 @@ export default async function Dashboard() {
         <Stat label="HAP past due" value={money(pastDueHap)} tone={pastDueHap > 0 ? "bad" : "good"} sub="Owed by housing authorities" />
       </div>
 
+      <Card className="mb-6">
+        <CardHeader
+          title={`Today · ${fmtDate(today)}`}
+          action={
+            <span className="flex gap-3 text-xs">
+              <Link href="/tasks" className={dueTasks ? "font-medium text-amber-700" : "text-muted hover:text-ink"}>{dueTasks} task{dueTasks === 1 ? "" : "s"} due</Link>
+              <Link href="/communications?tab=inbox" className={unreadReplies ? "font-medium text-red-700" : "text-muted hover:text-ink"}>{unreadReplies} new repl{unreadReplies === 1 ? "y" : "ies"}</Link>
+              <Link href="/calendar" className="text-muted hover:text-ink">Calendar →</Link>
+            </span>
+          }
+        />
+        {todayItems.length === 0 ? (
+          <div className="px-5 py-4 text-sm text-muted">Nothing on the calendar today.</div>
+        ) : (
+          <ul className="divide-y divide-line">
+            {todayItems.slice(0, 8).map((it) => (
+              <li key={it.key}>
+                <Link href={it.href} className="flex items-center gap-3 px-5 py-2.5 text-sm hover:bg-paper/50">
+                  <span className="w-16 shrink-0 text-xs text-muted">{it.allDay || !it.start ? kindLabel[it.kind] : fmtTime(it.start)}</span>
+                  <span className="truncate">{it.title}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader title="Past due" action={<Link href="/reports?r=delinquency" className="text-xs text-muted hover:text-ink">Aging report →</Link>} />
@@ -129,7 +163,7 @@ export default async function Dashboard() {
             ))}
             {emergencies.map((w) => (
               <Item key={w.id} href={`/maintenance/${w.id}`} icon={<Wrench size={16} className={w.priority === "EMERGENCY" ? "text-red-700" : "text-amber-700"} />}
-                title={`${w.title} · ${w.unit.property.name} ${w.unit.label}`} meta={`${titleCase(w.priority)} · open ${daysBetween(w.reportedOn, today)} days`} />
+                title={`${w.title} · ${w.unit.property.name} ${w.unit.label}`} meta={`${titleCase(w.priority)} · open ${Math.max(0, daysBetween(w.reportedOn, today))} days`} />
             ))}
             {dueInspections.map((i) => (
               <Item key={i.id} href="/inspections" icon={<ClipboardCheck size={16} className="text-blue-700" />}
