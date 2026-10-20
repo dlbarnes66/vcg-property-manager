@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Pencil } from "lucide-react";
+import { Pencil, ScrollText } from "lucide-react";
 import { db } from "@/lib/db";
 import { computeLeaseLedger } from "@/lib/ledger";
 import { tenantName } from "@/lib/queries";
@@ -69,9 +69,14 @@ export default async function LeasePage({ params }: { params: Promise<{ id: stri
         }
         back={{ href: "/leases", label: "Leases" }}
         actions={
-          <LinkButton href={`/leases/${id}/edit`} variant="secondary">
-            <Pencil size={14} /> Edit
-          </LinkButton>
+          <>
+            <LinkButton href={`/forms/new?leaseId=${id}`} variant="secondary">
+              <ScrollText size={14} /> Create form
+            </LinkButton>
+            <LinkButton href={`/leases/${id}/edit`} variant="secondary">
+              <Pencil size={14} /> Edit
+            </LinkButton>
+          </>
         }
       />
 

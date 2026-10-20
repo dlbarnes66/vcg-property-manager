@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { UserButton } from "@clerk/nextjs";
 import {
+  ScrollText,
   LayoutDashboard, Building2, Users, FileSignature, Wallet, Wrench, ClipboardCheck, FolderOpen,
   BarChart3, Landmark, HardHat, Menu, X, CalendarDays, ListChecks, MessagesSquare, NotebookPen, KeyRound, Calculator, Bot, ShieldCheck, Zap,
 } from "lucide-react";
@@ -45,6 +46,7 @@ const sections: { title?: string; items: NavItem[] }[] = [
   {
     title: "RECORDS",
     items: [
+      { href: "/forms", label: "Forms", icon: ScrollText },
       { href: "/documents", label: "Documents", icon: FolderOpen },
       { href: "/notes", label: "Notes", icon: NotebookPen },
       { href: "/reports", label: "Reports", icon: BarChart3 },
