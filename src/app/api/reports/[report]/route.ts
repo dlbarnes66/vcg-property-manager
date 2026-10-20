@@ -1,40 +1,34 @@
 import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/auth";
-import { cashFlow, delinquency, rentRoll, toCsv } from "@/lib/reports";
-import { dateToInput, todayUTC } from "@/lib/utils";
+import { fileSlug, reportToCsv } from "@/lib/report-kit";
+import { reportToPdf } from "@/lib/report-pdf";
+import { resolveReport } from "@/lib/report-run";
+import { dateToInput } from "@/lib/utils";
 
-const $ = (c: number | null) => (c == null ? "" : (c / 100).toFixed(2));
+export const runtime = "nodejs";
 
-export async function GET(_: Request, { params }: { params: Promise<{ report: string }> }) {
+/** GET /api/reports/<key>?from=&to=&propertyId=&format=csv|pdf */
+export async function GET(req: Request, { params }: { params: Promise<{ report: string }> }) {
   const viewer = await getViewer();
   if (viewer.kind !== "admin") return new NextResponse("Forbidden", { status: viewer.userId ? 403 : 401 });
 
   const { report } = await params;
-  let csv: string;
-  if (report === "rent-roll") {
-    const rows = await rentRoll();
-    csv = toCsv(
-      ["Property", "Unit", "Beds", "Baths", "Status", "Tenant", "Lease start", "Lease end", "Market rent", "Contract rent", "Tenant portion", "HAP", "Housing authority", "Balance"],
-      rows.map((r) => [r.property, r.unit, r.beds, r.baths, r.status, r.tenant, dateToInput(r.leaseStart), dateToInput(r.leaseEnd), $(r.marketRent), $(r.contractRent), $(r.tenantPortion), $(r.hapAmount), r.housingAuthority, $(r.balance)]),
-    );
-  } else if (report === "delinquency") {
-    const rows = await delinquency();
-    csv = toCsv(
-      ["Property", "Unit", "Tenant", "Owed by", "Payer", "Phone", "Past due", "0-30", "31-60", "61-90", "90+", "Oldest unpaid", "Lease status"],
-      rows.map((r) => [r.property, r.unit, r.tenant, r.party, r.payer, r.phone, $(r.pastDue), $(r.aging.current + r.aging.d30), $(r.aging.d60), $(r.aging.d90), $(r.aging.over90), dateToInput(r.oldestPastDue), r.leaseStatus]),
-    );
-  } else if (report === "cash-flow") {
-    const rows = await cashFlow(12);
-    csv = toCsv(["Month", "Tenant collections", "HAP collections", "Maintenance", "Net"], rows.map((r) => [r.period, $(r.tenant), $(r.hap), $(r.maintenance), $(r.net)]));
-  } else {
-    return new NextResponse("Unknown report", { status: 404 });
-  }
+  const sp = Object.fromEntries(new URL(req.url).searchParams);
+  const resolved = await resolveReport(report, sp);
+  if (!resolved) return new NextResponse("Unknown report", { status: 404 });
+  const { def, params: p } = resolved;
+  const data = await def.build(p);
 
-  return new NextResponse(csv, {
-    headers: {
-      "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${report}-${dateToInput(todayUTC())}.csv"`,
-      "Cache-Control": "private, no-store",
-    },
+  const name = `${fileSlug(def.title)}${p.propertyName ? `-${fileSlug(p.propertyName)}` : ""}-${def.mode === "asOf" ? dateToInput(p.to) : `${dateToInput(p.from)}-to-${dateToInput(p.to)}`}`;
+  const headers = { "Cache-Control": "private, no-store" };
+  if (sp.format === "pdf") {
+    const pdf = await reportToPdf(data);
+    return new NextResponse(new Uint8Array(pdf), {
+      headers: { ...headers, "Content-Type": "application/pdf", "Content-Disposition": `${sp.inline ? "inline" : "attachment"}; filename="${name}.pdf"` },
+    });
+  }
+  // BOM so Excel opens the file as UTF-8 (names with accents, the – in ranges)
+  return new NextResponse("﻿" + reportToCsv(data), {
+    headers: { ...headers, "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="${name}.csv"` },
   });
 }

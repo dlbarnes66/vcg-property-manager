@@ -1,6 +1,7 @@
 import { Fragment } from "react";
+import Link from "next/link";
 
-/** Tiny, safe markdown for AI answers: paragraphs, - / 1. lists, **bold**, `code`. No raw HTML. */
+/** Tiny, safe markdown for AI answers: paragraphs, - / 1. lists, **bold**, `code`, and links to pages inside this app ([text](/path)). No raw HTML or outside links. */
 export function MiniMarkdown({ text }: { text: string }) {
   const blocks = text.replace(/\r/g, "").split(/\n{2,}/);
   return (
@@ -19,8 +20,14 @@ export function MiniMarkdown({ text }: { text: string }) {
   );
 }
 
+const APP_LINK = /^\[([^\]]+)\]\((\/(?!\/)[^)\s]*)\)$/;
+
 function inline(s: string) {
-  return s.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).map((part, i) =>
-    part.startsWith("**") && part.endsWith("**") ? <strong key={i}>{part.slice(2, -2)}</strong> : part.startsWith("`") && part.endsWith("`") ? <code key={i} className="rounded bg-paper px-1 text-[0.9em]">{part.slice(1, -1)}</code> : <Fragment key={i}>{part}</Fragment>,
-  );
+  return s.split(/(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\(\/(?!\/)[^)\s]*\))/g).map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**")) return <strong key={i}>{part.slice(2, -2)}</strong>;
+    if (part.startsWith("`") && part.endsWith("`")) return <code key={i} className="rounded bg-paper px-1 text-[0.9em]">{part.slice(1, -1)}</code>;
+    const link = APP_LINK.exec(part);
+    if (link) return <Link key={i} href={link[2]} className="font-medium text-navy underline underline-offset-2">{link[1]}</Link>;
+    return <Fragment key={i}>{part}</Fragment>;
+  });
 }

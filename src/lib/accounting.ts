@@ -27,6 +27,8 @@ export const CODES = {
   DAMAGE_INCOME: "4300",
   OTHER_INCOME: "4900",
   REPAIRS: "5000",
+  MORTGAGE: "2500",
+  MORTGAGE_INTEREST: "5700",
 } as const;
 
 type Seed = { code: string; name: string; type: AccountType; isBank?: boolean; isSystem?: boolean; description?: string };

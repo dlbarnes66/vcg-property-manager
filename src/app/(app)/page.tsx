@@ -128,7 +128,7 @@ export default async function Dashboard() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
-          <CardHeader title="Past due" action={<Link href="/reports?r=delinquency" className="text-xs text-muted hover:text-ink">Aging report →</Link>} />
+          <CardHeader title="Past due" action={<Link href="/reports/delinquency" className="text-xs text-muted hover:text-ink">Aging report →</Link>} />
           {late.length === 0 ? (
             <Empty>Everyone is current.</Empty>
           ) : (

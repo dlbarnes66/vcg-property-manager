@@ -1,9 +1,10 @@
 import { db } from "./db";
 import { computeLeaseLedger, type Aging } from "./ledger";
 import { inForceLeaseWhere, tenantName } from "./queries";
-import { todayUTC } from "./utils";
+import { addDays, todayUTC } from "./utils";
 
 export type RentRollRow = {
+  propertyId: string;
   property: string;
   unit: string;
   beds: number;
@@ -21,8 +22,9 @@ export type RentRollRow = {
   balance: number;
 };
 
-export async function rentRoll(asOf = todayUTC()): Promise<RentRollRow[]> {
+export async function rentRoll(asOf = todayUTC(), propertyId: string | null = null): Promise<RentRollRow[]> {
   const units = await db.unit.findMany({
+    where: propertyId ? { propertyId } : {},
     orderBy: [{ property: { name: "asc" } }, { label: "asc" }],
     include: {
       property: true,
@@ -33,6 +35,7 @@ export async function rentRoll(asOf = todayUTC()): Promise<RentRollRow[]> {
     const l = u.leases[0];
     const ledger = l ? computeLeaseLedger(l.charges, l.payments, asOf) : null;
     return {
+      propertyId: u.propertyId,
       property: u.property.name,
       unit: u.label,
       beds: u.bedrooms,
@@ -67,9 +70,9 @@ export type DelinquencyRow = {
 };
 
 /** Every lease (active or ended) with money past due, split by who owes it. */
-export async function delinquency(asOf = todayUTC()): Promise<DelinquencyRow[]> {
+export async function delinquency(asOf = todayUTC(), propertyId: string | null = null): Promise<DelinquencyRow[]> {
   const leases = await db.lease.findMany({
-    where: { status: { in: ["ACTIVE", "ENDED"] } },
+    where: { status: { in: ["ACTIVE", "ENDED"] }, ...(propertyId ? { unit: { propertyId } } : {}) },
     include: { tenant: true, housingAuthority: true, unit: { include: { property: true } }, charges: true, payments: true },
   });
   const rows: DelinquencyRow[] = [];
@@ -88,17 +91,16 @@ export async function delinquency(asOf = todayUTC()): Promise<DelinquencyRow[]> 
 }
 
 /** Simple monthly cash flow: rent/fees collected vs. maintenance spend, by calendar month. */
-export async function cashFlow(months = 12, asOf = todayUTC()) {
-  const start = new Date(Date.UTC(asOf.getUTCFullYear(), asOf.getUTCMonth() - (months - 1), 1));
+export async function cashFlow(from: Date, to: Date, propertyId: string | null = null) {
+  const unit = propertyId ? { propertyId } : undefined;
   const [payments, maint] = await Promise.all([
-    db.payment.findMany({ where: { paidOn: { gte: start } }, select: { amount: true, paidOn: true, party: true } }),
-    db.maintenanceRequest.findMany({ where: { completedOn: { gte: start }, cost: { not: null } }, select: { cost: true, completedOn: true } }),
+    db.payment.findMany({ where: { paidOn: { gte: from, lt: addDays(to, 1) }, ...(unit ? { lease: { unit } } : {}) }, select: { amount: true, paidOn: true, party: true } }),
+    db.maintenanceRequest.findMany({
+      where: { completedOn: { gte: from, lt: addDays(to, 1) }, cost: { not: null }, ...(unit ? { unit } : {}) },
+      select: { cost: true, completedOn: true },
+    }),
   ]);
-  const out: { period: string; tenant: number; hap: number; maintenance: number; net: number }[] = [];
-  for (let i = 0; i < months; i++) {
-    const d = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + i, 1));
-    out.push({ period: d.toISOString().slice(0, 7), tenant: 0, hap: 0, maintenance: 0, net: 0 });
-  }
+  const out = monthsIn(from, to).map((period) => ({ period, tenant: 0, hap: 0, maintenance: 0, net: 0 }));
   const idx = (d: Date) => out.findIndex((o) => o.period === d.toISOString().slice(0, 7));
   for (const p of payments) {
     const i = idx(p.paidOn);
@@ -109,6 +111,14 @@ export async function cashFlow(months = 12, asOf = todayUTC()) {
     if (i >= 0) out[i].maintenance += m.cost ?? 0;
   }
   for (const o of out) o.net = o.tenant + o.hap - o.maintenance;
+  return out;
+}
+
+/** "YYYY-MM" for every calendar month touching [from, to]. */
+export function monthsIn(from: Date, to: Date) {
+  const out: string[] = [];
+  for (let d = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), 1)); d <= to; d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)))
+    out.push(d.toISOString().slice(0, 7));
   return out;
 }
 

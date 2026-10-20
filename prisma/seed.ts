@@ -121,7 +121,8 @@ async function main() {
 
   await db.maintenanceRequest.create({ data: { unitId: units[1].id, title: "Kitchen faucet leaking", priority: "NORMAL", status: "SCHEDULED", vendorId: vendor.id, scheduledOn: new Date(Date.now() + 2 * 86_400_000) } });
   await db.maintenanceRequest.create({ data: { unitId: dB.id, title: "No heat", priority: "EMERGENCY", status: "OPEN" } });
-  await db.maintenanceRequest.create({ data: { unitId: units[0].id, title: "Replace smoke detector", priority: "HIGH", status: "COMPLETED", completedOn: d(`${months[2]}-12`), cost: $(85) } });
+  const smoke = await db.maintenanceRequest.create({ data: { unitId: units[0].id, vendorId: vendor.id, title: "Replace smoke detector", priority: "HIGH", status: "COMPLETED", reportedOn: d(`${months[2]}-09`), completedOn: d(`${months[2]}-12`), cost: $(85) } });
+  await db.maintenanceRequest.create({ data: { unitId: dA.id, title: "Yard cleanup after storm", priority: "LOW", status: "COMPLETED", reportedOn: d(`${months[1]}-18`), completedOn: d(`${months[1]}-25`), cost: $(120) } });
 
   await db.inspection.create({ data: { unitId: dB.id, type: "HQS_ANNUAL", scheduledDate: d(`${months[3]}-05`), completedDate: d(`${months[3]}-05`), result: "FAIL", deficiencies: "Heating system inoperable; missing outlet cover in bedroom", cureByDate: new Date(Date.now() + 10 * 86_400_000) } });
   await db.inspection.create({ data: { unitId: units[3].id, type: "HQS_ANNUAL", scheduledDate: new Date(Date.now() + 12 * 86_400_000) } });
@@ -154,9 +155,26 @@ async function main() {
     },
   });
   const bill = await db.bill.create({
-    data: { vendorId: vendor.id, propertyId: oak.id, expenseAccountId: await acct("5000"), billDate: d(`${months[2]}-12`), amount: $(85), description: "Replace smoke detector", status: "PAID" },
+    data: { vendorId: vendor.id, propertyId: oak.id, expenseAccountId: await acct("5000"), maintenanceId: smoke.id, billDate: d(`${months[2]}-12`), amount: $(85), description: "Replace smoke detector", status: "PAID" },
   });
   await db.billPayment.create({ data: { billId: bill.id, bankAccountId: await acct("1000"), date: d(`${months[2]}-14`), amount: $(85), method: "CHECK", reference: "1001" } });
+
+  // Mortgage on Oak Ridge (purchase, then monthly payments split into interest and principal) and a couple of other bills
+  await db.journalEntry.create({
+    data: {
+      date: d("2025-03-15"), memo: "Purchase of Oak Ridge Apartments", source: "MANUAL",
+      lines: { create: [{ accountId: await acct("1500"), debit: $(1_250_000), propertyId: oak.id }, { accountId: await acct("2500"), credit: $(937_500), propertyId: oak.id }, { accountId: await acct("3000"), credit: $(312_500), propertyId: oak.id }] },
+    },
+  });
+  for (const p of months)
+    await db.journalEntry.create({
+      data: {
+        date: d(`${p}-05`), memo: "Mortgage payment", source: "MANUAL",
+        lines: { create: [{ accountId: await acct("5700"), debit: $(3_900), propertyId: oak.id }, { accountId: await acct("2500"), debit: $(1_450), propertyId: oak.id }, { accountId: await acct("1000"), credit: $(5_350), propertyId: oak.id }] },
+      },
+    });
+  await db.bill.create({ data: { payee: "Gulf States Insurance (demo)", propertyId: oak.id, expenseAccountId: await acct("5200"), billDate: d(`${months[1]}-01`), amount: $(3_200), description: "Property insurance — 6 months", status: "OPEN" } });
+  await db.bill.create({ data: { payee: "Mobile Area Water (demo)", propertyId: duplex.id, expenseAccountId: await acct("5100"), billDate: d(`${months[3]}-02`), amount: $(180), description: "Water & sewer", status: "OPEN" } });
 
   console.log("Seeded demo data: 2 properties, 10 units, 7 leases (6 HUD-VASH), 3 work orders, 3 inspections, 1 live listing with an application, opening books.");
 }
