@@ -24,7 +24,9 @@ export function AssistantChat({ conversationId, initial, configured }: { convers
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
-  useEffect(() => bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" }), [msgs]);
+  useEffect(() => {
+    bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [msgs]);
 
   async function send(text: string) {
     const q = text.trim();
