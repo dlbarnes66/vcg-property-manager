@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, Clock, FolderOpen, Wrench } from "lucide-react";
 import { requireTenant } from "@/lib/auth";
+import { ToSignBanner } from "@/components/to-sign-banner";
+import { pendingForTenant } from "@/lib/esign";
 import { payableNow, portalLease } from "@/lib/portal-data";
 import { refreshStaleOnlinePayments, stripeEnabled } from "@/lib/stripe";
 import { ActionForm } from "@/components/action-form";
@@ -13,6 +15,8 @@ export const metadata = { title: "Home" };
 
 export default async function PortalHome() {
   const { tenant } = await requireTenant();
+  const toSign = (await pendingForTenant(tenant.id)).map((s) => ({ id: s.id, title: s.request.title, sentAt: s.request.createdAt }));
+  const banner = <ToSignBanner items={toSign} hrefFor={(id) => `/portal/sign/${id}`} />;
   let lease = await portalLease(tenant.id);
 
   if (lease) {
@@ -22,11 +26,14 @@ export default async function PortalHome() {
 
   if (!lease) {
     return (
+      <div className="flex flex-col gap-5">
+      {banner}
       <Card>
         <Empty>
           Welcome, {tenant.firstName}. We couldn&apos;t find a lease linked to your account yet. Please contact your property manager.
         </Empty>
       </Card>
+      </div>
     );
   }
 
@@ -55,6 +62,7 @@ export default async function PortalHome() {
 
   return (
     <div className="flex flex-col gap-5">
+      {banner}
       <div>
         <h1 className="text-xl font-semibold">Hi, {tenant.firstName}</h1>
         <p className="text-sm text-muted">

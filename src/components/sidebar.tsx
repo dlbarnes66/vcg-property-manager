@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; badge?: "tasks" | "messages" | "applications" | "approvals" };
+type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; badge?: "tasks" | "messages" | "applications" | "approvals" | "toSign" };
 
 const sections: { title?: string; items: NavItem[] }[] = [
   {
@@ -46,7 +46,7 @@ const sections: { title?: string; items: NavItem[] }[] = [
   {
     title: "RECORDS",
     items: [
-      { href: "/forms", label: "Forms", icon: ScrollText },
+      { href: "/forms", label: "Forms", icon: ScrollText, badge: "toSign" },
       { href: "/documents", label: "Documents", icon: FolderOpen },
       { href: "/notes", label: "Notes", icon: NotebookPen },
       { href: "/reports", label: "Reports", icon: BarChart3 },
@@ -61,7 +61,7 @@ const sections: { title?: string; items: NavItem[] }[] = [
   },
 ];
 
-export function Sidebar({ counts = {} }: { counts?: { tasks?: number; messages?: number; applications?: number; approvals?: number } }) {
+export function Sidebar({ counts = {} }: { counts?: { tasks?: number; messages?: number; applications?: number; approvals?: number; toSign?: number } }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
@@ -80,7 +80,7 @@ export function Sidebar({ counts = {} }: { counts?: { tasks?: number; messages?:
         <Icon size={16} strokeWidth={1.8} />
         {label}
         {badge && (counts[badge] ?? 0) > 0 && (
-          <span className={cn("ml-auto rounded-full px-1.5 text-[11px] font-semibold", badge === "messages" || badge === "approvals" ? "bg-red-500 text-white" : "bg-gold text-navy")}>
+          <span className={cn("ml-auto rounded-full px-1.5 text-[11px] font-semibold", badge === "messages" || badge === "approvals" || badge === "toSign" ? "bg-red-500 text-white" : "bg-gold text-navy")}>
             {counts[badge]}
           </span>
         )}

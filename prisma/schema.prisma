@@ -235,6 +235,7 @@ model Tenant {
   messages            Message[]
   applications        Application[]
   formDocs            FormDoc[]
+  signers             Signer[]
 }
 
 // Public Housing Agency that pays the HAP (housing assistance payment) portion.
@@ -418,16 +419,17 @@ model Document {
   applicationId    String?
   createdAt        DateTime         @default(now())
 
-  property     Property?           @relation(fields: [propertyId], references: [id], onDelete: SetNull)
-  unit         Unit?               @relation(fields: [unitId], references: [id], onDelete: SetNull)
-  tenant       Tenant?             @relation(fields: [tenantId], references: [id], onDelete: SetNull)
-  lease        Lease?              @relation(fields: [leaseId], references: [id], onDelete: SetNull)
-  maintenance  MaintenanceRequest? @relation(fields: [maintenanceId], references: [id], onDelete: SetNull)
-  inspection   Inspection?         @relation(fields: [inspectionId], references: [id], onDelete: SetNull)
-  listing      Listing?            @relation(fields: [listingId], references: [id], onDelete: SetNull)
-  application  Application?        @relation(fields: [applicationId], references: [id], onDelete: SetNull)
-  formDoc      FormDoc?            @relation("FormDocPdf")
-  formTemplate FormTemplate?       @relation("FormTemplateFile")
+  property      Property?           @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  unit          Unit?               @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  tenant        Tenant?             @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  lease         Lease?              @relation(fields: [leaseId], references: [id], onDelete: SetNull)
+  maintenance   MaintenanceRequest? @relation(fields: [maintenanceId], references: [id], onDelete: SetNull)
+  inspection    Inspection?         @relation(fields: [inspectionId], references: [id], onDelete: SetNull)
+  listing       Listing?            @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  application   Application?        @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  formDoc       FormDoc?            @relation("FormDocPdf")
+  formTemplate  FormTemplate?       @relation("FormTemplateFile")
+  signedRequest SignatureRequest?   @relation("SignedPdf")
 }
 
 // A rent payment a tenant started in the portal. Becomes a ledger Payment only once Stripe confirms the money.
@@ -1040,13 +1042,14 @@ model FormDoc {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  tenant   Tenant?       @relation(fields: [tenantId], references: [id], onDelete: SetNull)
-  lease    Lease?        @relation(fields: [leaseId], references: [id], onDelete: SetNull)
-  property Property?     @relation(fields: [propertyId], references: [id], onDelete: SetNull)
-  unit     Unit?         @relation(fields: [unitId], references: [id], onDelete: SetNull)
-  vendor   Vendor?       @relation(fields: [vendorId], references: [id], onDelete: SetNull)
-  template FormTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
-  document Document?     @relation("FormDocPdf", fields: [documentId], references: [id], onDelete: SetNull)
+  tenant            Tenant?            @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  lease             Lease?             @relation(fields: [leaseId], references: [id], onDelete: SetNull)
+  property          Property?          @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  unit              Unit?              @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  vendor            Vendor?            @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  template          FormTemplate?      @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  document          Document?          @relation("FormDocPdf", fields: [documentId], references: [id], onDelete: SetNull)
+  signatureRequests SignatureRequest[]
 
   @@index([state, category])
 }
@@ -1076,4 +1079,99 @@ model AppSetting {
   key       String   @id
   value     String
   updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------------------------
+// E-signatures (built in): a finished form sent to one or more signers
+// ---------------------------------------------------------------------------------------------
+
+enum SignatureRequestStatus {
+  PENDING
+  COMPLETED
+  DECLINED
+  CANCELLED
+}
+
+enum SignerRole {
+  LANDLORD
+  TENANT
+  COSIGNER
+  VENDOR
+  OTHER
+}
+
+enum SignerStatus {
+  PENDING
+  SIGNED
+  DECLINED
+}
+
+model SignatureRequest {
+  id               String                 @id @default(cuid())
+  formDocId        String
+  title            String
+  status           SignatureRequestStatus @default(PENDING)
+  message          String?
+  bodySnapshot     String // the form text as sent (shown to signers on screen)
+  originalKey      String // storage key of the exact PDF being signed
+  originalHash     String // SHA-256 of that PDF
+  pageCount        Int
+  signedDocumentId String?                @unique // final PDF with signatures + certificate
+  signedHash       String?
+  createdByEmail   String?
+  completedAt      DateTime?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  formDoc        FormDoc          @relation(fields: [formDocId], references: [id], onDelete: Cascade)
+  signedDocument Document?        @relation("SignedPdf", fields: [signedDocumentId], references: [id], onDelete: SetNull)
+  signers        Signer[]
+  events         SignatureEvent[]
+
+  @@index([status])
+}
+
+model Signer {
+  id             String       @id @default(cuid())
+  requestId      String
+  role           SignerRole
+  name           String
+  email          String?
+  tenantId       String? // signs in the tenant portal
+  isOwner        Boolean      @default(false) // signs inside the app (you)
+  tokenHash      String?      @unique // emailed-link signers: SHA-256 of the link token
+  tokenExpiresAt DateTime?
+  status         SignerStatus @default(PENDING)
+  signatureType  String? // "typed" | "drawn"
+  signatureText  String?
+  signatureImage String? // PNG data URL of a drawn signature
+  consentAt      DateTime?
+  signedAt       DateTime?
+  declinedReason String?
+  ip             String?
+  userAgent      String?
+  createdAt      DateTime     @default(now())
+
+  request SignatureRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  tenant  Tenant?          @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  events  SignatureEvent[]
+
+  @@index([tenantId, status])
+}
+
+// Audit trail: every step, with time, IP, and device.
+model SignatureEvent {
+  id        String   @id @default(cuid())
+  requestId String
+  signerId  String?
+  type      String // created, emailed, viewed, consented, signed, declined, completed, cancelled, link_reissued
+  detail    String?
+  ip        String?
+  userAgent String?
+  at        DateTime @default(now())
+
+  request SignatureRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  signer  Signer?          @relation(fields: [signerId], references: [id], onDelete: SetNull)
+
+  @@index([requestId, at])
 }

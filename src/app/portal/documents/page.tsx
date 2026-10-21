@@ -1,6 +1,8 @@
 import { FileText } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireTenant } from "@/lib/auth";
+import { ToSignBanner } from "@/components/to-sign-banner";
+import { pendingForTenant } from "@/lib/esign";
 import { tenantDocumentWhere } from "@/lib/portal-data";
 import { Badge, Card, Empty } from "@/components/ui";
 import { fmtDate, formatBytes, titleCase } from "@/lib/utils";
@@ -14,6 +16,7 @@ export default async function PortalDocuments() {
   return (
     <div className="flex flex-col gap-5">
       <h1 className="text-xl font-semibold">Documents</h1>
+      <ToSignBanner items={(await pendingForTenant(tenant.id)).map((s) => ({ id: s.id, title: s.request.title, sentAt: s.request.createdAt }))} hrefFor={(id) => `/portal/sign/${id}`} />
       <Card>
         {docs.length === 0 ? (
           <Empty>No documents have been shared with you yet. Your lease and notices will show up here.</Empty>
