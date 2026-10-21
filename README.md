@@ -26,6 +26,7 @@ A "DoorLoop Lite" for VCG Veterans Housing Fund I: properties, units, tenants, l
 - **Maintenance**: work orders with priority, status, vendor, cost, and photos.
 - **Inspections**: HQS initial/annual, NSPIRE, re-inspections, move-in/out.
 - **Documents**: upload to any property, tenant, lease, or work order; library view with filters.
+- **E-signatures (free, built in)**: send finished forms to tenants (portal), yourself, and others (private link); typed or drawn signatures; signed PDF with certificate and audit trail.
 - **Forms**: AI-drafted leases, addenda (voucher, pet, lead paint, mold, utilities…), notices (pay-or-quit, violation, entry, non-renewal, rent change), move-in/out checklists and deposit itemization, and vendor agreements, written for any of the 50 states + DC from your records. Edit, save as PDF to Documents, share to the tenant's portal, and keep approved versions in a library organized by state.
 - **Reports**: 12 reports in four groups — HUD-VASH (HAP by housing authority, recert & inspection compliance, rent split & voucher mix), Investors (quarterly investor summary, property NOI, cash flow), Rent & collections (rent roll, delinquency aging, collections trend, vacancy loss), and Maintenance (work orders, spending by property & vendor). Every report filters by dates and property and downloads as a **PDF** or a **CSV** for Excel.
 - **Resident portal** (`/portal`): invited tenants see their balance and rent breakdown, pay by bank transfer, submit repair requests with photos, and download documents you share. See below.
@@ -91,7 +92,14 @@ To clear demo data before entering real properties: `npm run db:seed -- --reset`
 2. **New form** (or **Create form** on a lease or tenant page): pick the form and the lease or tenant it's for. The state comes from the property's address (you can change it). Add anything specific, like "12-month term, water included," then **Draft with AI**. You'll see it being written; a full lease takes a minute or two.
 3. Review the **Check before using** list: blanks to fill in and state rules to verify. Edit the text directly or ask the AI to change something.
 4. **Finish & save PDF** saves it to Documents, linked to the tenant and lease. Tick **Share with the tenant** to put it in their portal. Editing later and clicking **Update PDF** replaces the saved copy.
-5. **Save to library** keeps the wording for that state. Once an attorney has approved a version, save it (or upload the attorney's file) to the state's library and start new forms from it.
+5. **Get it signed** (free, built in): on a finished form, choose who signs and click **Send for signature**.
+   - **Tenants** sign in their resident portal (they see "Waiting for your signature").
+   - **You** sign in the app (Forms shows a red badge when something's waiting for you).
+   - **Anyone else** (co-signer, vendor, a tenant without the portal) gets a private link by email. If email isn't set up yet, copy the link and send it yourself. Links work for 30 days; **New link** replaces one.
+   - Signers review the form, agree to sign electronically, then type or draw their signature (finger works on a phone).
+   - When everyone has signed, the signed PDF (original pages plus a signature certificate and audit trail: who, when, IP, device, and the document's SHA-256 fingerprint) is saved to Documents and shared with the tenant. Anyone can decline with a reason, which creates a task for you.
+   - E-signing doesn't replace how a legal notice must be delivered: still serve pay-or-quit and similar notices the way your state requires.
+6. **Save to library** keeps the wording for that state. Once an attorney has approved a version, save it (or upload the attorney's file) to the state's library and start new forms from it.
 
 The **State** dropdown on the Forms page filters everything (your forms and the library) to one state, with the states you use listed first.
 
@@ -236,6 +244,7 @@ In test mode, pick **Test Institution** in the bank-linking screen, and use the 
 prisma/schema.prisma        data model (read this first)
 prisma/seed.ts              demo data
 src/lib/ledger.ts           rent run, late fees, balances, aging (the money logic)
+src/lib/esign.ts            e-signatures: send, sign, decline, cancel, complete (esign-pdf.ts builds the certificate)
 src/lib/forms/              form catalog, AI drafting prompts, facts from records, Markdown → PDF
 src/lib/states.ts           the 50 states + DC
 src/lib/report-defs.ts      the report catalog (titles, columns, KPIs)
@@ -255,5 +264,5 @@ src/lib/ai/                 Claude tool loop (assistant.ts) and the tools it can
 src/lib/agent-actions.ts    what the AI can propose, validation, and the approve → execute step
 src/lib/workflows.ts        workflow triggers, once-only firing, and actions
 src/lib/messaging.ts        who gets a message (consent / opt-out rules) and sending; messaging-providers.ts talks to SendGrid/Twilio
-tests/                      ledger, portal, payments, webhooks, tasks, calendar, messaging, accounting, leasing, AI, workflows, reports, forms
+tests/                      ledger, portal, payments, webhooks, tasks, calendar, messaging, accounting, leasing, AI, workflows, reports, forms, e-signatures
 ```

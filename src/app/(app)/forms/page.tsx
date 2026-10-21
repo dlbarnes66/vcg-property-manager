@@ -3,6 +3,8 @@ import type { FormCategory, Prisma } from "@prisma/client";
 import { FileText, Plus, Upload } from "lucide-react";
 import { deleteTemplate, saveLandlordDetails, uploadTemplate } from "./actions";
 import { ActionForm } from "@/components/action-form";
+import { ToSignBanner } from "@/components/to-sign-banner";
+import { pendingForOwner } from "@/lib/esign";
 import { FilterSelect } from "@/components/filter-select";
 import { Badge, Card, CardBody, CardHeader, Empty, Field, FormGrid, Input, PageHeader, Select, Table, Td, Th } from "@/components/ui";
 import { db } from "@/lib/db";
@@ -22,13 +24,16 @@ export default async function FormsPage({ searchParams }: { searchParams: Promis
   const where = { ...(state ? { state: state === "US" ? "US" : state } : {}), ...(cat ? { category: cat } : {}) };
   const tplWhere: Prisma.FormTemplateWhereInput = { ...(state ? { state: { in: [state, "US"] } } : {}), ...(cat ? { category: cat } : {}) };
 
-  const [forms, templates, landlord, counts, tplCounts] = await Promise.all([
+  const [forms, templates, landlord, counts, tplCounts, toSign, outForSig] = await Promise.all([
     db.formDoc.findMany({ where, orderBy: { updatedAt: "desc" }, take: 200, include: { tenant: true, property: true, vendor: true, unit: true, document: { select: { sharedWithTenant: true } } } }),
     db.formTemplate.findMany({ where: tplWhere, orderBy: [{ state: "asc" }, { category: "asc" }, { title: "asc" }], include: { document: { select: { id: true, name: true } } } }),
     getLandlord(),
     db.formDoc.groupBy({ by: ["state"], _count: true }),
     db.formTemplate.groupBy({ by: ["state"], _count: true }),
+    pendingForOwner(),
+    db.signatureRequest.findMany({ where: { status: "PENDING" }, select: { formDocId: true } }),
   ]);
+  const out = new Set(outForSig.map((r) => r.formDocId));
   const used = new Map<string, number>();
   for (const c of [...counts, ...tplCounts]) used.set(c.state, (used.get(c.state) ?? 0) + c._count);
   const usedStates = [...used.keys()].filter((s) => s !== "US").sort();
@@ -46,6 +51,7 @@ export default async function FormsPage({ searchParams }: { searchParams: Promis
         actions={<Link href={`/forms/new${state && state !== "US" ? `?state=${state}` : ""}`} className="inline-flex h-9 items-center gap-1.5 rounded-md bg-navy px-4 text-sm font-medium text-white hover:bg-navy-600"><Plus size={14} /> New form</Link>}
       />
 
+      <div className="mb-6"><ToSignBanner items={toSign.map((s) => ({ id: s.id, title: s.request.title, sentAt: s.request.createdAt }))} hrefFor={(id) => `/forms/sign/${id}`} /></div>
       {!landlordSet && (
         <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           Add your <b>landlord details</b> at the bottom of this page (owner's legal name and notice address) so every form names the right owner.
@@ -104,6 +110,7 @@ export default async function FormsPage({ searchParams }: { searchParams: Promis
                   <Td>
                     {f.status === "FINAL" ? <Badge tone="green">Finished</Badge> : <Badge tone="amber">Draft</Badge>}
                     {f.document?.sharedWithTenant && <span className="ml-1"><Badge tone="blue">In portal</Badge></span>}
+                    {out.has(f.id) && <span className="ml-1"><Badge tone="amber">Out for signature</Badge></span>}
                   </Td>
                   <Td className="whitespace-nowrap text-muted">{fmtDate(f.updatedAt)}</Td>
                 </tr>

@@ -5,6 +5,7 @@ import { deleteForm, saveAsTemplate, toggleShare } from "../actions";
 import { ActionForm } from "@/components/action-form";
 import { FormEditor } from "@/components/form-editor";
 import { MiniMarkdown } from "@/components/mini-markdown";
+import { SignaturesCard } from "@/components/signatures-card";
 import { Badge, Card, CardBody, CardHeader, DetailList, Field, Input, PageHeader, Select } from "@/components/ui";
 import { aiConfigured } from "@/lib/ai/assistant";
 import { db } from "@/lib/db";
@@ -43,6 +44,7 @@ export default async function FormPage({ params }: { params: Promise<{ id: strin
               </CardBody>
             </Card>
           )}
+          <SignaturesCard formId={f.id} />
           <Card>
             <CardHeader title="Details" />
             <CardBody>
