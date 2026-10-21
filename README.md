@@ -26,6 +26,7 @@ A "DoorLoop Lite" for VCG Veterans Housing Fund I: properties, units, tenants, l
 - **Maintenance**: work orders with priority, status, vendor, cost, and photos.
 - **Inspections**: HQS initial/annual, NSPIRE, re-inspections, move-in/out.
 - **Documents**: upload to any property, tenant, lease, or work order; library view with filters.
+- **Resources → State Law Guide**: quick reference for all 50 states + DC (deposit limits and return deadlines, late fees, notice for unpaid rent, ending month-to-month, entry notice, voucher/source-of-income protection) with statute citations, a compare-all-states view, and the federal rules for voucher tenancies. The AI uses the state's notes when drafting forms, and the assistant can look a state up. A research summary, not legal advice: data is in `src/lib/state-law.ts` with a review date.
 - **E-signatures (free, built in)**: send finished forms to tenants (portal), yourself, and others (private link); typed or drawn signatures; signed PDF with certificate and audit trail.
 - **Forms**: AI-drafted leases, addenda (voucher, pet, lead paint, mold, utilities…), notices (pay-or-quit, violation, entry, non-renewal, rent change), move-in/out checklists and deposit itemization, and vendor agreements, written for any of the 50 states + DC from your records. Edit, save as PDF to Documents, share to the tenant's portal, and keep approved versions in a library organized by state.
 - **Reports**: 12 reports in four groups — HUD-VASH (HAP by housing authority, recert & inspection compliance, rent split & voucher mix), Investors (quarterly investor summary, property NOI, cash flow), Rent & collections (rent roll, delinquency aging, collections trend, vacancy loss), and Maintenance (work orders, spending by property & vendor). Every report filters by dates and property and downloads as a **PDF** or a **CSV** for Excel.
@@ -247,6 +248,7 @@ src/lib/ledger.ts           rent run, late fees, balances, aging (the money logi
 src/lib/esign.ts            e-signatures: send, sign, decline, cancel, complete (esign-pdf.ts builds the certificate)
 src/lib/forms/              form catalog, AI drafting prompts, facts from records, Markdown → PDF
 src/lib/states.ts           the 50 states + DC
+src/lib/state-law.ts        State Law Guide data (update LAST_REVIEWED when re-checked)
 src/lib/report-defs.ts      the report catalog (titles, columns, KPIs)
 src/lib/report-data.ts      the queries behind each report
 src/lib/report-math.ts      vacancy days, recert/inspection status, cap rate (pure, tested)
@@ -264,5 +266,5 @@ src/lib/ai/                 Claude tool loop (assistant.ts) and the tools it can
 src/lib/agent-actions.ts    what the AI can propose, validation, and the approve → execute step
 src/lib/workflows.ts        workflow triggers, once-only firing, and actions
 src/lib/messaging.ts        who gets a message (consent / opt-out rules) and sending; messaging-providers.ts talks to SendGrid/Twilio
-tests/                      ledger, portal, payments, webhooks, tasks, calendar, messaging, accounting, leasing, AI, workflows, reports, forms, e-signatures
+tests/                      ledger, portal, payments, webhooks, tasks, calendar, messaging, accounting, leasing, AI, workflows, reports, forms, e-signatures, state law
 ```

@@ -1,3 +1,4 @@
+import { stateLawSummary } from "../state-law";
 import { stateName } from "../states";
 import type { FormType } from "./catalog";
 
@@ -5,7 +6,8 @@ import type { FormType } from "./catalog";
  * Prompt for drafting a form. Pure (no database), so it can be tested directly.
  * The drafter returns the document, then a line "===REVIEW NOTES===", then notes for the landlord.
  */
-export const NOTES_MARKER = "===REVIEW NOTES===";
+import { NOTES_MARKER } from "./marker";
+export { NOTES_MARKER };
 
 export type Facts = Record<string, Record<string, string | number | null | undefined>>;
 
@@ -49,6 +51,9 @@ export function userPrompt(o: { form: Pick<FormType, "title" | "guidance">; stat
     `What this form should cover:\n${o.form.guidance}`,
     `Facts:\n<facts>\n${factsText(o.facts)}\n</facts>`,
   ];
+  const ref = stateLawSummary(o.state);
+  if (ref)
+    parts.push(`The landlord's ${stateName(o.state)} quick-reference notes (a research summary; follow them where they apply, but if you know they are out of date, follow current law and say so in the review notes):\n<state_reference>\n${ref}\n</state_reference>`);
   if (o.template?.body)
     parts.push(`Start from this template from the landlord's ${stateName(o.state)} library. Keep its structure and wording where lawful, update it with the facts, and fix anything that conflicts with the rules above:\n<template title="${o.template.title.replace(/"/g, "'")}">\n${o.template.body.slice(0, 60000)}\n</template>`);
   if (o.instructions?.trim()) parts.push(`Landlord's instructions for this form:\n<instructions>\n${o.instructions.trim().slice(0, 4000)}\n</instructions>`);

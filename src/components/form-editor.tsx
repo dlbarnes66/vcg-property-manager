@@ -6,7 +6,7 @@ import { Sparkles } from "lucide-react";
 import { finishForm, saveForm } from "@/app/(app)/forms/actions";
 import { FormMarkdown } from "@/components/form-markdown";
 import { Button, Card, CardBody, Input, Textarea } from "@/components/ui";
-import { NOTES_MARKER } from "@/lib/forms/prompt";
+import { NOTES_MARKER } from "@/lib/forms/marker";
 import { readDraftStream } from "@/lib/forms/stream-client";
 import { cn } from "@/lib/utils";
 

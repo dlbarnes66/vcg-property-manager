@@ -8,6 +8,8 @@ import { delinquency, rentRoll } from "../reports";
 import { detailOf, proposeAction } from "../agent-actions";
 import { REPORTS, reportByKey } from "../report-defs";
 import { fmtCell, readParams } from "../report-kit";
+import { LAST_REVIEWED, stateLaw } from "../state-law";
+import { stateName, toStateCode } from "../states";
 import { addDays, dateToInput, money, periodOf, toDate, todayUTC } from "../utils";
 
 /*
@@ -220,6 +222,18 @@ const read: Record<string, { def: Omit<ToolDef, "name">; run: Handler }> = {
       };
     },
   },
+  state_law: {
+    def: {
+      description: "The landlord's quick reference on a state's landlord-tenant rules: security deposit limit and return deadline, late fees, notice for unpaid rent, ending month-to-month, entry notice, voucher (source-of-income) protection, with statute citations. A research summary, not legal advice.",
+      input_schema: { type: "object", properties: { state: { type: "string", description: "Two-letter code or name, e.g. AL or North Carolina" } }, required: ["state"] },
+    },
+    run: async (i) => {
+      const code = toStateCode(str(i.state));
+      const s = code ? stateLaw(code) : null;
+      if (!s) return { error: "Unknown state" };
+      return { state: stateName(code), reviewed: LAST_REVIEWED, link: `/resources/states/${code}`, ...s, note: "Statewide rules only; cities/counties may add more. Tell the user to verify the statute before acting." };
+    },
+  },
   applications: {
     def: { description: "Rental applications. Default: new, screening, and approved.", input_schema: { type: "object", properties: { status: { type: "string", enum: ["NEW", "SCREENING", "APPROVED", "DENIED", "WITHDRAWN", "CONVERTED"] } } } },
     run: async (i) =>
@@ -312,6 +326,7 @@ export const toolLabel = (name: string, input: Record<string, unknown>) =>
     tasks: "Checked tasks",
     financial_report: input.report === "bs" ? "Ran the balance sheet" : "Ran the profit & loss",
     applications: "Checked applications",
+    state_law: `Looked up ${String(input.state ?? "state")} landlord-tenant rules`,
     run_report: `Ran the ${reportByKey(String(input.report ?? ""))?.title.toLowerCase() ?? "report"} report`,
     recent_messages: "Read recent messages",
   })[name] ?? (isProposeTool(name) ? "Drafted an action for your approval" : name);

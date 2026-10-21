@@ -7,7 +7,7 @@ import { startBlank, startFromTemplate } from "@/app/(app)/forms/actions";
 import { FormMarkdown } from "@/components/form-markdown";
 import { Button, Card, CardBody, CardHeader, Field, Select, Textarea } from "@/components/ui";
 import { CATEGORY_LABEL, CATEGORY_ORDER, FORM_TYPES, formType } from "@/lib/forms/catalog";
-import { NOTES_MARKER } from "@/lib/forms/prompt";
+import { NOTES_MARKER } from "@/lib/forms/marker";
 import { readDraftStream } from "@/lib/forms/stream-client";
 import { STATES } from "@/lib/states";
 
@@ -115,11 +115,15 @@ export function FormGenerator(p: {
           {(ft.needs === "property" || ft.needs === "vendor") && pick("Property", propertyId, setPropertyId, p.properties, "None")}
           {ft.needs === "vendor" && pick("Vendor", vendorId, setVendorId, p.vendors, "None — leave blanks")}
 
-          <Field label="State" hint={subjectState && !stateChoice ? "From the property's address" : undefined}>
+          <Field label="State">
             <Select value={state} onChange={(e) => setStateChoice(e.target.value)} disabled={busy}>
               <option value="">Pick a state…</option>
               {STATES.map((s) => <option key={s.code} value={s.code}>{s.name}</option>)}
             </Select>
+            <span className="text-xs text-muted">
+              {subjectState && !stateChoice ? "From the property's address. " : ""}
+              {state && <a href={`/resources/states/${state}`} target="_blank" rel="noreferrer" className="font-medium text-navy hover:underline">See {STATES.find((s) => s.code === state)?.name} rules ↗</a>}
+            </span>
           </Field>
 
           {templates.length > 0 && (
