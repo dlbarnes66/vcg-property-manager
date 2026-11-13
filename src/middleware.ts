@@ -10,6 +10,7 @@ const isPublic = createRouteMatcher([
   "/api/stripe/webhook",
   "/api/twilio/(.*)",
   "/api/calendar/feed",
+  "/api/health", // yes/no diagnostics only, no secret values
   "/s/(.*)", // private signing links (the token is the key)
   "/api/sign/(.*)", // checks the signer's token or session itself
   // Public rentals pages and application form
